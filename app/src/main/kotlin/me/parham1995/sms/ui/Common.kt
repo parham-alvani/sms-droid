@@ -1,5 +1,6 @@
 package me.parham1995.sms.ui
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
@@ -9,7 +10,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import java.time.Instant
@@ -19,13 +22,30 @@ import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import kotlin.math.absoluteValue
 
-/** A circle with the name's first letter, coloured by the address so a sender keeps one colour. */
+/**
+ * The contact's photo in a circle, or, without one, the name's first letter,
+ * coloured by the address so a sender keeps one colour.
+ */
 @Composable
 fun Avatar(
     name: String,
     address: String,
+    photoUri: String? = null,
     size: Dp = 44.dp,
 ) {
+    val photo = rememberContactPhoto(photoUri)
+    if (photo != null) {
+        Image(
+            photo,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier =
+                Modifier
+                    .size(size)
+                    .clip(CircleShape),
+        )
+        return
+    }
     val colors =
         listOf(
             MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer,

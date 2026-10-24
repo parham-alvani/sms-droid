@@ -31,6 +31,7 @@ class ConversationsViewModel
         data class Item(
             val conversation: Conversation,
             val name: String,
+            val photoUri: String?,
         )
 
         data class State(
@@ -52,8 +53,10 @@ class ConversationsViewModel
             combine(isDefault, conversations, contacts.index, query) { allowed, list, index, q ->
                 val items =
                     list
-                        .map { Item(it, index.displayName(it.address)) }
-                        .filter {
+                        .map { conversation ->
+                            val contact = index.lookup(conversation.address)
+                            Item(conversation, contact?.name ?: conversation.address, contact?.photoUri)
+                        }.filter {
                             q.isBlank() ||
                                 it.name.contains(
                                     q,

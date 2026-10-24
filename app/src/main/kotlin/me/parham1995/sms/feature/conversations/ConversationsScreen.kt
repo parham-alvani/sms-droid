@@ -197,7 +197,7 @@ private fun ConversationRow(
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Avatar(item.name, conversation.address)
+        Avatar(item.name, conversation.address, item.photoUri)
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(

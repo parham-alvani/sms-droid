@@ -43,6 +43,7 @@ class ThreadViewModel
         data class State(
             val name: String = "",
             val address: String = "",
+            val photoUri: String? = null,
             val messages: List<Message>? = null,
             val sims: List<Sim> = emptyList(),
             val sim: Int = -1,
@@ -86,6 +87,7 @@ class ThreadViewModel
                 State(
                     name = index.displayName(address),
                     address = address,
+                    photoUri = index.lookup(address)?.photoUri,
                     messages = list,
                     sims = extra.sims,
                     sim = extra.chosenSim ?: simFor(list, extra),

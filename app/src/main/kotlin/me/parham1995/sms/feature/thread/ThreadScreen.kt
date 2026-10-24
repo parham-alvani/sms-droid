@@ -54,6 +54,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import me.parham1995.sms.data.sms.Message
 import me.parham1995.sms.messaging.Sim
+import me.parham1995.sms.ui.Avatar
 import me.parham1995.sms.ui.clockTime
 import me.parham1995.sms.ui.dayLabel
 import me.parham1995.sms.ui.dayOf
@@ -83,10 +84,16 @@ fun ThreadScreen(
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
                 },
                 title = {
-                    Column {
-                        Text(state.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        if (state.name != state.address && state.address.isNotEmpty()) {
-                            Text(state.address, style = MaterialTheme.typography.labelMedium, color = mutedText)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Avatar(state.name, state.address, state.photoUri, size = 36.dp)
+                        Column {
+                            Text(state.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            if (state.name != state.address && state.address.isNotEmpty()) {
+                                Text(state.address, style = MaterialTheme.typography.labelMedium, color = mutedText)
+                            }
                         }
                     }
                 },

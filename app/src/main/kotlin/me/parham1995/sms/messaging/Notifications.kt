@@ -11,12 +11,16 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.Person
 import androidx.core.app.RemoteInput
+import androidx.core.graphics.drawable.IconCompat
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import me.parham1995.sms.MainActivity
 import me.parham1995.sms.R
 import me.parham1995.sms.core.OneTimeCodes
 import me.parham1995.sms.data.contacts.ContactsSource
 import me.parham1995.sms.data.sms.SmsStore
+import me.parham1995.sms.ui.ContactPhotos
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -57,12 +61,15 @@ class Notifications
                 return
             }
             val address = unread.last().address
-            val name = contacts.index.value.displayName(address)
+            val contact = contacts.index.value.lookup(address)
+            val name = contact?.name ?: address
+            val photo = withContext(Dispatchers.IO) { ContactPhotos.load(context, contact?.photoUri) }
             val sender =
                 Person
                     .Builder()
                     .setName(name)
                     .setKey(address)
+                    .apply { photo?.let { setIcon(IconCompat.createWithBitmap(it)) } }
                     .build()
             val style = NotificationCompat.MessagingStyle(Person.Builder().setName("You").build())
             unread.forEach { style.addMessage(it.body, it.date, sender) }

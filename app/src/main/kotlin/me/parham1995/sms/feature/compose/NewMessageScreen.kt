@@ -121,13 +121,18 @@ fun NewMessageScreen(
                 // or a short code.
                 if (typed.isNotEmpty()) {
                     item(key = "typed") {
-                        Recipient(name = "Send to $typed", number = null, address = typed) {
+                        Recipient(name = "Send to $typed", number = null, address = typed, photoUri = null) {
                             onChosen(typed, viewModel.draft)
                         }
                     }
                 }
                 items(matches, key = { "${it.id}:${it.number}" }) { contact ->
-                    Recipient(name = contact.name, number = contact.number, address = contact.number) {
+                    Recipient(
+                        name = contact.name,
+                        number = contact.number,
+                        address = contact.number,
+                        photoUri = contact.photoUri,
+                    ) {
                         onChosen(contact.number, viewModel.draft)
                     }
                 }
@@ -141,6 +146,7 @@ private fun Recipient(
     name: String,
     number: String?,
     address: String,
+    photoUri: String?,
     onClick: () -> Unit,
 ) {
     Row(
@@ -151,7 +157,7 @@ private fun Recipient(
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Avatar(name, address, size = 40.dp)
+        Avatar(name, address, photoUri, size = 40.dp)
         Column {
             Text(name, style = MaterialTheme.typography.bodyLarge)
             number?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = mutedText) }
