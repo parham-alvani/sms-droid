@@ -1,4 +1,7 @@
-# sms-droid
+<div align="center">
+   <img src="art/icon-512.png" alt="A panda reading a message on a phone, with a chat bubble" width="160">
+   <h1>sms-droid</h1>
+</div>
 
 An SMS app for Android 16 that does SMS only, and keeps every message in a git repository.
 

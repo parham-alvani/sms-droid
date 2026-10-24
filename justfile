@@ -84,6 +84,11 @@ clean:
 verify-apk apk="app/build/outputs/apk/release/app-release.apk":
     ./tools/verify-apk.sh {{ apk }}
 
+# rebuild the launcher icon from art/icon.png (needs Pillow); writes a preview to /tmp
+[group('release')]
+icon:
+    python3 tools/icon.py art/icon.png . /tmp
+
 # set the release version everywhere (e.g. `just bump 0.2.0`)
 [group('release')]
 bump version:
