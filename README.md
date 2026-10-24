@@ -9,6 +9,7 @@ An SMS app for Android 16 that does SMS only, and keeps every message in a git r
 - **Backup to git over SSH.** One JSON-lines file per conversation, added to and never trimmed. The SSH key is made on the phone. Use a private repository unless you want the messages public. Restore puts back what the phone is missing.
 - **Copy one-time codes** from the notification, for `رمز پویا`, `کد`, `code` and `OTP`.
 - **Two SIMs.** A reply goes out on the SIM the conversation came in on, and the composer lets you choose.
+- **Delete conversations** from the list (long press) or the conversation. When a backup repository is set, a backup runs first, and nothing is deleted if it fails, so the backup keeps every deleted message.
 - Reply and mark as read from the notification, delivery reports, and quick replies to a call.
 
 There is no MMS. The phone it is written for is on a network that has none.

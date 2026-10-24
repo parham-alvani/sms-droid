@@ -3,7 +3,8 @@ package me.parham1995.sms.feature.conversations
 import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,9 +20,12 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -30,6 +34,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
@@ -37,6 +42,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -51,6 +57,8 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.parham1995.sms.messaging.DefaultSmsApp
 import me.parham1995.sms.ui.Avatar
+import me.parham1995.sms.ui.DeleteConversationDialog
+import me.parham1995.sms.ui.DeletingDialog
 import me.parham1995.sms.ui.mutedText
 import me.parham1995.sms.ui.shortTime
 
@@ -64,7 +72,9 @@ fun ConversationsScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val query by viewModel.query.collectAsStateWithLifecycle()
+    val keepsBackup by viewModel.keepsBackup.collectAsStateWithLifecycle()
     var searching by rememberSaveable { mutableStateOf(false) }
+    var toDelete by remember { mutableStateOf<ConversationsViewModel.Item?>(null) }
     val context = LocalContext.current
 
     val permissions =
@@ -87,6 +97,26 @@ fun ConversationsScreen(
                 ),
             )
         }
+    }
+
+    toDelete?.let { item ->
+        DeleteConversationDialog(
+            name = item.name,
+            keepsBackup = keepsBackup,
+            onConfirm = {
+                toDelete = null
+                viewModel.delete(item.conversation.threadId)
+            },
+            onDismiss = { toDelete = null },
+        )
+    }
+    if (state.deleting) DeletingDialog()
+    state.error?.let { error ->
+        AlertDialog(
+            onDismissRequest = viewModel::dismissError,
+            confirmButton = { TextButton(onClick = viewModel::dismissError) { Text("OK") } },
+            text = { Text(error) },
+        )
     }
 
     Scaffold(
@@ -155,6 +185,7 @@ fun ConversationsScreen(
                             ConversationRow(
                                 item,
                                 onClick = { onOpen(item.conversation.threadId, item.conversation.address) },
+                                onDelete = { toDelete = item },
                             )
                         }
                     }
@@ -182,17 +213,37 @@ private fun NotDefault(onSwitch: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ConversationRow(
     item: ConversationsViewModel.Item,
     onClick: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val conversation = item.conversation
+    val unread = conversation.unread > 0
+    var menu by remember { mutableStateOf(false) }
+    Box {
+        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            DropdownMenuItem(text = { Text("Delete") }, onClick = {
+                menu = false
+                onDelete()
+            })
+        }
+        ConversationLine(item, Modifier.combinedClickable(onClick = onClick, onLongClick = { menu = true }))
+    }
+}
+
+@Composable
+private fun ConversationLine(
+    item: ConversationsViewModel.Item,
+    modifier: Modifier,
 ) {
     val conversation = item.conversation
     val unread = conversation.unread > 0
     Row(
-        Modifier
+        modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically,

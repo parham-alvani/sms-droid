@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -55,6 +56,8 @@ import kotlinx.coroutines.launch
 import me.parham1995.sms.data.sms.Message
 import me.parham1995.sms.messaging.Sim
 import me.parham1995.sms.ui.Avatar
+import me.parham1995.sms.ui.DeleteConversationDialog
+import me.parham1995.sms.ui.DeletingDialog
 import me.parham1995.sms.ui.clockTime
 import me.parham1995.sms.ui.dayLabel
 import me.parham1995.sms.ui.dayOf
@@ -68,6 +71,22 @@ fun ThreadScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val draft by viewModel.draft.collectAsStateWithLifecycle()
+    val keepsBackup by viewModel.keepsBackup.collectAsStateWithLifecycle()
+    var confirmDelete by remember { mutableStateOf(false) }
+
+    LaunchedEffect(state.deleted) { if (state.deleted) onBack() }
+    if (confirmDelete) {
+        DeleteConversationDialog(
+            name = state.name,
+            keepsBackup = keepsBackup,
+            onConfirm = {
+                confirmDelete = false
+                viewModel.deleteConversation()
+            },
+            onDismiss = { confirmDelete = false },
+        )
+    }
+    if (state.deleting) DeletingDialog()
 
     state.error?.let { error ->
         AlertDialog(
@@ -94,6 +113,13 @@ fun ThreadScreen(
                             if (state.name != state.address && state.address.isNotEmpty()) {
                                 Text(state.address, style = MaterialTheme.typography.labelMedium, color = mutedText)
                             }
+                        }
+                    }
+                },
+                actions = {
+                    if (!state.messages.isNullOrEmpty()) {
+                        IconButton(onClick = { confirmDelete = true }) {
+                            Icon(Icons.Filled.Delete, "Delete conversation")
                         }
                     }
                 },

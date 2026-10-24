@@ -1,5 +1,6 @@
 package me.parham1995.sms.data.sms
 
+import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
 import android.database.ContentObserver
@@ -168,6 +169,12 @@ class SmsStore
         suspend fun delete(messageId: Long) =
             withContext(Dispatchers.IO) {
                 resolver.delete(Uri.withAppendedPath(Sms.CONTENT_URI, messageId.toString()), null, null)
+            }
+
+        /** Deletes a whole thread: its messages and the thread itself. Returns how many rows went. */
+        suspend fun deleteThread(threadId: Long) =
+            withContext(Dispatchers.IO) {
+                resolver.delete(ContentUris.withAppendedId(Threads.CONTENT_URI, threadId), null, null)
             }
 
         /** Every message worth keeping, as the backup writes it: received and sent, not drafts or failures. */

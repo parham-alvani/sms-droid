@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.parham1995.sms.Thread
+import me.parham1995.sms.data.SettingsStore
+import me.parham1995.sms.data.backup.ConversationDeleter
 import me.parham1995.sms.data.contacts.ContactsSource
 import me.parham1995.sms.data.reason
 import me.parham1995.sms.data.runCatchingUnlessCancelled
@@ -37,6 +39,8 @@ class ThreadViewModel
         private val store: SmsStore,
         private val sender: SmsSender,
         private val notifications: Notifications,
+        private val deleter: ConversationDeleter,
+        settings: SettingsStore,
         sims: Sims,
         contacts: ContactsSource,
     ) : ViewModel() {
@@ -48,6 +52,9 @@ class ThreadViewModel
             val sims: List<Sim> = emptyList(),
             val sim: Int = -1,
             val error: String? = null,
+            val deleting: Boolean = false,
+            /** Set once the whole conversation is deleted, so the screen leaves. */
+            val deleted: Boolean = false,
         )
 
         private val route = savedState.toRoute<Thread>()
@@ -62,6 +69,8 @@ class ThreadViewModel
             val defaultSim: Int,
             val chosenSim: Int? = null,
             val error: String? = null,
+            val deleting: Boolean = false,
+            val deleted: Boolean = false,
         )
 
         init {
@@ -92,6 +101,8 @@ class ThreadViewModel
                     sims = extra.sims,
                     sim = extra.chosenSim ?: simFor(list, extra),
                     error = extra.error,
+                    deleting = extra.deleting,
+                    deleted = extra.deleted,
                 )
             }.stateIn(
                 viewModelScope,
@@ -135,6 +146,22 @@ class ThreadViewModel
             }
 
         fun delete(message: Message) = viewModelScope.launch { store.delete(message.id) }
+
+        /** Whether a deleted conversation stays in a backup repository, which the confirmation says. */
+        val keepsBackup: StateFlow<Boolean> =
+            settings.settings
+                .map { it.isConfigured }
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_MILLIS), false)
+
+        fun deleteConversation() {
+            val id = threadId.value ?: return
+            viewModelScope.launch {
+                extra.update { it.copy(deleting = true) }
+                runCatchingUnlessCancelled { deleter.delete(id) }
+                    .onSuccess { extra.update { it.copy(deleting = false, deleted = true) } }
+                    .onFailure { e -> extra.update { it.copy(deleting = false, error = "Not deleted: ${e.reason()}") } }
+            }
+        }
 
         private companion object {
             const val STOP_MILLIS = 5_000L
