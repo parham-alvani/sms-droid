@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- An SMS app with no radio has nothing to do; lint asks every app this. -->
+    <uses-feature
+        android:name="android.hardware.telephony"
+        android:required="true"
+        tools:ignore="UnnecessaryRequiredFeature" />
+
+    <!-- The SMS role grants these; they are declared so it can. -->
+    <uses-permission android:name="android.permission.READ_SMS" />
+    <uses-permission android:name="android.permission.SEND_SMS" />
+    <uses-permission android:name="android.permission.RECEIVE_SMS" />
+    <uses-permission android:name="android.permission.RECEIVE_MMS" />
+
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <!-- Only to list the SIMs, for choosing which one sends. -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- The git backup. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!--
+        No Android backup: the deploy key is sealed by this phone's hardware
+        and would be useless restored elsewhere, and the messages have their
+        own backup in git.
+    -->
+    <application
+        android:name=".SmsApplication"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Sms">
+
+        <!--
+            The SMS role needs an activity for SENDTO on sms/smsto; it also
+            opens links like sms:+98912...?body=hi and text shared from other
+            apps. The mms schemes are listed because other apps send them too,
+            and this phone sends whatever arrives as SMS.
+        -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.APP_MESSAGING" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SENDTO" />
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="sms" />
+                <data android:scheme="smsto" />
+                <data android:scheme="mms" />
+                <data android:scheme="mmsto" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
+        <!-- Messages arriving. Only the default SMS app receives SMS_DELIVER. -->
+        <receiver
+            android:name=".messaging.SmsDeliverReceiver"
+            android:exported="true"
+            android:permission="android.permission.BROADCAST_SMS">
+            <intent-filter>
+                <action android:name="android.provider.Telephony.SMS_DELIVER" />
+            </intent-filter>
+        </receiver>
+
+        <!--
+            Required for the SMS role, and nothing else: this phone's network
+            has no MMS. The receiver drops what it is given.
+        -->
+        <receiver
+            android:name=".messaging.MmsPushReceiver"
+            android:exported="true"
+            android:permission="android.permission.BROADCAST_WAP_PUSH">
+            <intent-filter>
+                <action android:name="android.provider.Telephony.WAP_PUSH_DELIVER" />
+                <data android:mimeType="application/vnd.wap.mms-message" />
+            </intent-filter>
+        </receiver>
+
+        <!-- "Reply with a message" from an incoming call. Required for the SMS role. -->
+        <service
+            android:name=".messaging.HeadlessSmsSendService"
+            android:exported="true"
+            android:permission="android.permission.SEND_RESPOND_VIA_MESSAGE">
+            <intent-filter>
+                <action android:name="android.intent.action.RESPOND_VIA_MESSAGE" />
+                <category android:name="android.intent.category.DEFAULT" />
+
+                <data android:scheme="sms" />
+                <data android:scheme="smsto" />
+                <data android:scheme="mms" />
+                <data android:scheme="mmsto" />
+            </intent-filter>
+        </service>
+
+        <!-- Answers from the radio about what this app sent, and the notification's buttons. -->
+        <receiver
+            android:name=".messaging.SentReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".messaging.DeliveredReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".messaging.NotificationActionReceiver"
+            android:exported="false" />
+
+        <!--
+            WorkManager is initialised on demand by SmsApplication, with Hilt's
+            worker factory, so its startup initializer is removed. The provider
+            itself stays: lifecycle-process starts through it too.
+        -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
+    </application>
+</manifest>

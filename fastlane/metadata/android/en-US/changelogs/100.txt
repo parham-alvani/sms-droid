@@ -1,0 +1,1 @@
+First release: SMS only, contact names for sender names, one-time code copy, and a git backup.

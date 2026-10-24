@@ -1,0 +1,29 @@
+# Android / Gradle
+*.iml
+.gradle/
+build/
+local.properties
+.cxx/
+release/
+
+# Signing material never belongs in this repository.
+*.jks
+*.keystore
+keystore.properties
+
+# Nor does a real message backup. Tests build their own messages.
+*.jsonl
+!**/src/test/resources/**/*.jsonl
+
+# A bare `Icon` in the common global gitignore excludes any `icon` directory
+# on a case-insensitive filesystem.
+!icon/
+
+# IDE
+.idea/
+.kotlin/
+captures/
+*.hprof
+
+# macOS
+.DS_Store
