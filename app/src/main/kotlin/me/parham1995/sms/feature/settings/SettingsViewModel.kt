@@ -77,6 +77,9 @@ class SettingsViewModel
                 if (on) BackupWorker.scheduleSoon(context)
             }
 
+        fun removeAdSender(key: String) =
+            viewModelScope.launch { store.update { it.copy(adSenders = it.adSenders - key) } }
+
         fun generateKey() =
             viewModelScope.launch {
                 _ui.update { it.copy(busy = true, message = null) }

@@ -1,5 +1,6 @@
 package me.parham1995.sms.data.backup
 
+import me.parham1995.sms.data.SettingsStore
 import me.parham1995.sms.data.sms.SmsStore
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -18,6 +19,7 @@ class ConversationDeleter
     constructor(
         private val backup: BackupRepository,
         private val sms: SmsStore,
+        private val settings: SettingsStore,
     ) {
         /** Backs up when a repository is set, then deletes; throws, deleting nothing, when the backup fails. */
         suspend fun delete(threadId: Long) = delete(listOf(threadId))
@@ -37,6 +39,6 @@ class ConversationDeleter
         suspend fun deleteAds(): Int {
             val upTo = System.currentTimeMillis()
             backup.backup()
-            return sms.deleteMessages(sms.adIds(upTo))
+            return sms.deleteMessages(sms.adIds(upTo, settings.current().adRule))
         }
     }

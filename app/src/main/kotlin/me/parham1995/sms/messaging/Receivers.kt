@@ -12,7 +12,6 @@ import android.util.Log
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-import me.parham1995.sms.core.Ads
 import me.parham1995.sms.data.ApplicationScope
 import me.parham1995.sms.data.SettingsStore
 import me.parham1995.sms.data.backup.BackupWorker
@@ -77,7 +76,9 @@ class SmsDeliverReceiver : BroadcastReceiver() {
             // An ad that is going to be deleted is stored read and stays quiet;
             // the backup that runs soon takes it first.
             val quiet =
-                Ads.isAd(body) && runCatchingUnlessCancelled { settings.current().deleteAds }.getOrDefault(false)
+                runCatchingUnlessCancelled {
+                    settings.current().let { it.deleteAds && it.adRule.isAd(address, body) }
+                }.getOrDefault(false)
             val uri =
                 store.insertIncoming(
                     address = address,

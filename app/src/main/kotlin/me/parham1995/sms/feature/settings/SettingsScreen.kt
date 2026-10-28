@@ -17,6 +17,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ElevatedCard
@@ -147,6 +148,7 @@ fun SettingsScreen(
                     }
                     Switch(checked = current.deleteAds, onCheckedChange = viewModel::setDeleteAds)
                 }
+                AdSenders(current.adSenders, onRemove = viewModel::removeAdSender)
                 CallingCode(current, onSave = viewModel::saveCallingCode)
             }
 
@@ -180,6 +182,33 @@ fun SettingsScreen(
                 ) {
                     Text(BuildConfig.REPOSITORY)
                 }
+            }
+        }
+    }
+}
+
+/** The senders whose every message is an ad; they are added from a conversation's menu. */
+@Composable
+private fun AdSenders(
+    senders: Set<String>,
+    onRemove: (String) -> Unit,
+) {
+    Column {
+        Text("Ad senders")
+        Text(
+            if (senders.isEmpty()) {
+                "None. Mark a sender with \"Treat as ads\" in a conversation's menu, or select conversations " +
+                    "in the list. Everything they send is an ad, except one-time codes."
+            } else {
+                "Everything they send is an ad, except one-time codes."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = mutedText,
+        )
+        senders.sorted().forEach { key ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(key, modifier = Modifier.weight(1f))
+                IconButton(onClick = { onRemove(key) }) { Icon(Icons.Filled.Close, "Not ads") }
             }
         }
     }

@@ -19,7 +19,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.withContext
-import me.parham1995.sms.core.Ads
+import me.parham1995.sms.core.AdRule
 import me.parham1995.sms.core.backup.BackupMessage
 import java.time.Instant
 import javax.inject.Inject
@@ -59,14 +59,14 @@ class SmsStore
                 awaitClose { resolver.unregisterContentObserver(observer) }
             }.conflate()
 
-        /** One row per thread, newest first. */
-        suspend fun conversations(): List<Conversation> =
+        /** One row per thread, newest first, with its ads counted by [ads]. */
+        suspend fun conversations(ads: AdRule): List<Conversation> =
             withContext(Dispatchers.IO) {
                 val byThread = LinkedHashMap<Long, Conversation>()
                 query(Sms.CONTENT_URI, null, null, "${Sms.DATE} DESC") { message ->
                     val known = byThread[message.threadId]
                     val unread = if (message.isIncoming && !message.read) 1 else 0
-                    val ad = if (message.isAd) 1 else 0
+                    val ad = if (message.isIncoming && ads.isAd(message.address, message.body)) 1 else 0
                     byThread[message.threadId] =
                         known?.copy(unread = known.unread + unread, ads = known.ads + ad)
                             ?: Conversation(
@@ -182,8 +182,11 @@ class SmsStore
                 resolver.delete(ContentUris.withAppendedId(Threads.CONTENT_URI, threadId), null, null)
             }
 
-        /** Received ads (by [Ads]) that arrived at or before [upTo], epoch millis. */
-        suspend fun adIds(upTo: Long): List<Long> =
+        /** Received ads (by [ads]) that arrived at or before [upTo], epoch millis. */
+        suspend fun adIds(
+            upTo: Long,
+            ads: AdRule,
+        ): List<Long> =
             withContext(Dispatchers.IO) {
                 buildList {
                     query(
@@ -191,7 +194,7 @@ class SmsStore
                         "${Sms.TYPE} = ? AND ${Sms.DATE} <= ?",
                         arrayOf(Sms.MESSAGE_TYPE_INBOX.toString(), upTo.toString()),
                         null,
-                    ) { if (it.isAd) add(it.id) }
+                    ) { if (ads.isAd(it.address, it.body)) add(it.id) }
                 }
             }
 
@@ -350,5 +353,4 @@ data class Message(
     val isFailed: Boolean get() = type == Sms.MESSAGE_TYPE_FAILED
     val isPending: Boolean get() = type == Sms.MESSAGE_TYPE_OUTBOX || type == Sms.MESSAGE_TYPE_QUEUED
     val isDelivered: Boolean get() = status == Sms.STATUS_COMPLETE
-    val isAd: Boolean get() = isIncoming && Ads.isAd(body)
 }

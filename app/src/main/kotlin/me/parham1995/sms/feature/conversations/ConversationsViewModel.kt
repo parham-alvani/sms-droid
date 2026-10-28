@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -17,6 +18,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.parham1995.sms.data.SettingsStore
+import me.parham1995.sms.data.backup.BackupWorker
 import me.parham1995.sms.data.backup.ConversationDeleter
 import me.parham1995.sms.data.contacts.ContactsSource
 import me.parham1995.sms.data.reason
@@ -34,7 +36,7 @@ class ConversationsViewModel
         store: SmsStore,
         private val contacts: ContactsSource,
         private val deleter: ConversationDeleter,
-        settings: SettingsStore,
+        private val settings: SettingsStore,
     ) : ViewModel() {
         data class Item(
             val conversation: Conversation,
@@ -72,7 +74,14 @@ class ConversationsViewModel
         private val conversations =
             isDefault.flatMapLatest { allowed ->
                 // Without the SMS role the provider refuses to be read at all.
-                if (!allowed) flowOf(emptyList()) else store.changes().map { store.conversations() }
+                if (!allowed) {
+                    flowOf(emptyList())
+                } else {
+                    // A new ad sender recounts the ads without a message changing.
+                    combine(store.changes(), settings.settings.map { it.adRule }.distinctUntilChanged()) { _, ads ->
+                        store.conversations(ads)
+                    }
+                }
             }
 
         val state: StateFlow<State> =
@@ -109,6 +118,13 @@ class ConversationsViewModel
 
         fun deleteAds() =
             run(done = { count -> if (count == 1) "Deleted 1 ad" else "Deleted $count ads" }) { deleter.deleteAds() }
+
+        /** Every message from these conversations' senders is an ad from now on; the next backup deletes them. */
+        fun markAdSenders(addresses: Collection<String>) =
+            viewModelScope.launch {
+                addresses.forEach { settings.setAdSender(it, isAd = true) }
+                if (settings.current().deleteAds) BackupWorker.scheduleSoon(context)
+            }
 
         fun dismissMessage() = action.update { it.copy(message = null) }
 

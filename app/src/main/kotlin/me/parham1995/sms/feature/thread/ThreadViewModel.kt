@@ -1,10 +1,12 @@
 package me.parham1995.sms.feature.thread
 
+import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -19,6 +21,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.parham1995.sms.Thread
 import me.parham1995.sms.data.SettingsStore
+import me.parham1995.sms.data.backup.BackupWorker
 import me.parham1995.sms.data.backup.ConversationDeleter
 import me.parham1995.sms.data.contacts.ContactsSource
 import me.parham1995.sms.data.reason
@@ -40,7 +43,8 @@ class ThreadViewModel
         private val sender: SmsSender,
         private val notifications: Notifications,
         private val deleter: ConversationDeleter,
-        settings: SettingsStore,
+        @ApplicationContext private val context: Context,
+        private val settings: SettingsStore,
         sims: Sims,
         contacts: ContactsSource,
     ) : ViewModel() {
@@ -55,6 +59,8 @@ class ThreadViewModel
             val deleting: Boolean = false,
             /** Set once the whole conversation is deleted, so the screen leaves. */
             val deleted: Boolean = false,
+            /** Whether everything this sender sends is an ad. */
+            val isAdSender: Boolean = false,
         )
 
         private val route = savedState.toRoute<Thread>()
@@ -91,7 +97,7 @@ class ThreadViewModel
                 }.map { (_, list) -> list }
 
         val state: StateFlow<State> =
-            combine(messages, contacts.index, extra) { list, index, extra ->
+            combine(messages, contacts.index, extra, settings.settings) { list, index, extra, current ->
                 val address = route.address ?: list.lastOrNull()?.address.orEmpty()
                 State(
                     name = index.displayName(address),
@@ -103,6 +109,7 @@ class ThreadViewModel
                     error = extra.error,
                     deleting = extra.deleting,
                     deleted = extra.deleted,
+                    isAdSender = address.isNotEmpty() && current.adRule.isAdSender(address),
                 )
             }.stateIn(
                 viewModelScope,
@@ -160,6 +167,15 @@ class ThreadViewModel
                 runCatchingUnlessCancelled { deleter.delete(id) }
                     .onSuccess { extra.update { it.copy(deleting = false, deleted = true) } }
                     .onFailure { e -> extra.update { it.copy(deleting = false, error = "Not deleted: ${e.reason()}") } }
+            }
+        }
+
+        /** Makes this conversation's sender an ad sender, or stops it being one. */
+        fun setAdSender(isAd: Boolean) {
+            val address = state.value.address.takeIf { it.isNotEmpty() } ?: return
+            viewModelScope.launch {
+                settings.setAdSender(address, isAd)
+                if (isAd && settings.current().deleteAds) BackupWorker.scheduleSoon(context)
             }
         }
 

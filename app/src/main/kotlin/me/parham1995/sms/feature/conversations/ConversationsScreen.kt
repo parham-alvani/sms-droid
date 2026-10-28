@@ -84,6 +84,7 @@ fun ConversationsScreen(
     var selected by rememberSaveable { mutableStateOf(emptySet<Long>()) }
     var confirmDelete by remember { mutableStateOf(false) }
     var confirmAds by remember { mutableStateOf(false) }
+    var confirmAdSenders by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val selecting = selected.isNotEmpty()
 
@@ -136,6 +137,18 @@ fun ConversationsScreen(
             onDismiss = { confirmDelete = false },
         )
     }
+    if (confirmAdSenders && selecting) {
+        val chosen = state.items.orEmpty().filter { it.conversation.threadId in selected }
+        AdSendersDialog(
+            names = chosen.map { it.name },
+            onConfirm = {
+                confirmAdSenders = false
+                viewModel.markAdSenders(chosen.map { it.conversation.address })
+                selected = emptySet()
+            },
+            onDismiss = { confirmAdSenders = false },
+        )
+    }
     if (confirmAds) {
         DeleteConversationDialog(
             title = if (state.ads == 1) "Delete 1 ad?" else "Delete ${state.ads} ads?",
@@ -167,6 +180,7 @@ fun ConversationsScreen(
                     },
                     allSelected = selected.size == state.items?.size,
                     onDelete = { confirmDelete = true },
+                    onMarkAds = { confirmAdSenders = true },
                 )
             } else {
                 TopAppBar(
@@ -287,14 +301,57 @@ private fun SelectionBar(
     onClear: () -> Unit,
     onSelectAll: () -> Unit,
     onDelete: () -> Unit,
+    onMarkAds: () -> Unit,
 ) {
+    var open by remember { mutableStateOf(false) }
     TopAppBar(
         navigationIcon = { IconButton(onClick = onClear) { Icon(Icons.Filled.Close, "Clear selection") } },
         title = { Text("$count selected") },
         actions = {
             if (!allSelected) TextButton(onClick = onSelectAll) { Text("Select all") }
             IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, "Delete") }
+            Box {
+                IconButton(onClick = { open = true }) { Icon(Icons.Filled.MoreVert, "More") }
+                DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                    DropdownMenuItem(text = { Text("Treat senders as ads") }, onClick = {
+                        open = false
+                        onMarkAds()
+                    })
+                }
+            }
         },
+    )
+}
+
+/** Asks before senders become ad senders, since everything they sent goes with the next backup. */
+@Composable
+private fun AdSendersDialog(
+    names: List<String>,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                if (names.size ==
+                    1
+                ) {
+                    "Treat ${names.single()} as ads?"
+                } else {
+                    "Treat ${names.size} senders as ads?"
+                },
+            )
+        },
+        text = {
+            Text(
+                "Every message from them is an ad, except one-time codes: it arrives without a notification, " +
+                    "and the next backup keeps it and deletes it from the phone. Settings lists the ad senders " +
+                    "and takes them off.",
+            )
+        },
+        confirmButton = { TextButton(onClick = onConfirm) { Text("Treat as ads") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
 

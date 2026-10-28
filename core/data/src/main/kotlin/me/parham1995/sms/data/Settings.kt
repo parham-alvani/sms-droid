@@ -7,11 +7,14 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import me.parham1995.sms.core.AdRule
+import me.parham1995.sms.core.Ads
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -36,8 +39,12 @@ data class Settings(
      * as read, without a notification.
      */
     val deleteAds: Boolean = true,
+    /** Senders whose every message is an ad, by `Ads.senderKey`. */
+    val adSenders: Set<String> = emptySet(),
 ) {
     val isConfigured: Boolean get() = remoteUrl.isNotBlank()
+
+    val adRule: AdRule get() = AdRule(adSenders, callingCode)
 }
 
 /** How the last backup went, for the settings screen. */
@@ -78,7 +85,17 @@ class SettingsStore
                 prefs[CALLING_CODE] = next.callingCode
                 prefs[DELIVERY_REPORTS] = next.deliveryReports
                 prefs[DELETE_ADS] = next.deleteAds
+                prefs[AD_SENDERS] = next.adSenders
             }
+        }
+
+        /** Makes [address] an ad sender, or stops it being one. */
+        suspend fun setAdSender(
+            address: String,
+            isAd: Boolean,
+        ) = update {
+            val key = Ads.senderKey(address, it.callingCode)
+            it.copy(adSenders = if (isAd) it.adSenders + key else it.adSenders - key)
         }
 
         suspend fun recordSuccess(
@@ -106,6 +123,7 @@ class SettingsStore
                 callingCode = this[CALLING_CODE] ?: defaults.callingCode,
                 deliveryReports = this[DELIVERY_REPORTS] ?: defaults.deliveryReports,
                 deleteAds = this[DELETE_ADS] ?: defaults.deleteAds,
+                adSenders = this[AD_SENDERS] ?: defaults.adSenders,
             )
         }
 
@@ -117,6 +135,7 @@ class SettingsStore
             val CALLING_CODE = stringPreferencesKey("calling_code")
             val DELIVERY_REPORTS = booleanPreferencesKey("delivery_reports")
             val DELETE_ADS = booleanPreferencesKey("delete_ads")
+            val AD_SENDERS = stringSetPreferencesKey("ad_senders")
             val BACKUP_AT = longPreferencesKey("backup_at")
             val BACKUP_ADDED = intPreferencesKey("backup_added")
             val BACKUP_ERROR = stringPreferencesKey("backup_error")

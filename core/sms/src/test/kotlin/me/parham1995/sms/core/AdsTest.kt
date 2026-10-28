@@ -54,3 +54,38 @@ class AdsTest {
         assertThat(Ads.isAd("Your order 11 has shipped")).isFalse()
     }
 }
+
+class AdRuleTest {
+    private val rule =
+        AdRule(
+            senders = setOf(Ads.senderKey("Example Shop", "98"), Ads.senderKey("09001234567", "98")),
+        )
+
+    @Test
+    fun `everything from an ad sender is an ad`() {
+        assertThat(rule.isAd("Example Shop", "تخفیف ویژه پاییز")).isTrue()
+        assertThat(rule.isAd("+989001234567", "تخفیف ویژه پاییز")).isTrue()
+    }
+
+    @Test
+    fun `a sender name matches however it is spelled`() {
+        assertThat(rule.isAdSender("EXAMPLE_SHOP")).isTrue()
+        assertThat(rule.isAdSender("example-shop")).isTrue()
+    }
+
+    @Test
+    fun `a national number and its international form are one sender`() {
+        assertThat(rule.isAdSender("0900 123 4567")).isTrue()
+    }
+
+    @Test
+    fun `a code from an ad sender is kept`() {
+        assertThat(rule.isAd("Example Shop", "کد ورود شما: 482913")).isFalse()
+    }
+
+    @Test
+    fun `other senders still need the marker`() {
+        assertThat(rule.isAd("Another Shop", "تخفیف ویژه پاییز")).isFalse()
+        assertThat(rule.isAd("Another Shop", "تخفیف ویژه پاییز لغو11")).isTrue()
+    }
+}
