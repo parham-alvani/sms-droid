@@ -2,14 +2,25 @@ package me.parham1995.sms
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color.TRANSPARENT
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
+import me.parham1995.sms.data.SettingsStore
+import me.parham1995.sms.data.ThemeChoice
 import me.parham1995.sms.messaging.Intents
 import me.parham1995.sms.ui.theme.SmsTheme
+import me.parham1995.sms.ui.theme.isDark
+import javax.inject.Inject
 
 /**
  * The one activity. Besides the launcher it is what other apps open: an
@@ -20,12 +31,29 @@ import me.parham1995.sms.ui.theme.SmsTheme
 class MainActivity : ComponentActivity() {
     private val launches = MutableStateFlow<Launch?>(null)
 
+    @Inject lateinit var settings: SettingsStore
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         if (savedInstanceState == null) launches.value = launchOf(intent)
         setContent {
-            SmsTheme {
+            val theme by remember { settings.settings.map { it.theme } }.collectAsStateWithLifecycle(ThemeChoice.DARK)
+            // The bars' icons follow the theme, not the phone: naz on a phone
+            // in light mode would otherwise get dark icons on a dark bar.
+            val dark = theme.isDark()
+            LaunchedEffect(dark) {
+                val bars =
+                    if (dark) {
+                        SystemBarStyle.dark(
+                            TRANSPARENT,
+                        )
+                    } else {
+                        SystemBarStyle.light(TRANSPARENT, TRANSPARENT)
+                    }
+                enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
+            }
+            SmsTheme(theme) {
                 SmsNavHost(launches = launches, onLaunched = { launches.value = null })
             }
         }

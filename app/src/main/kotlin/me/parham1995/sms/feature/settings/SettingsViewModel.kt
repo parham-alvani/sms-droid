@@ -15,6 +15,7 @@ import kotlinx.coroutines.launch
 import me.parham1995.sms.data.BackupStatus
 import me.parham1995.sms.data.Settings
 import me.parham1995.sms.data.SettingsStore
+import me.parham1995.sms.data.ThemeChoice
 import me.parham1995.sms.data.backup.BackupRepository
 import me.parham1995.sms.data.backup.BackupWorker
 import me.parham1995.sms.data.git.SshKeyStore
@@ -76,6 +77,8 @@ class SettingsViewModel
                 store.update { it.copy(deleteAds = on) }
                 if (on) BackupWorker.scheduleSoon(context)
             }
+
+        fun setTheme(theme: ThemeChoice) = viewModelScope.launch { store.update { it.copy(theme = theme) } }
 
         fun removeAdSender(key: String) =
             viewModelScope.launch { store.update { it.copy(adSenders = it.adSenders - key) } }

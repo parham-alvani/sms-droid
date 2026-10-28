@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -27,6 +29,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -43,6 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -54,6 +58,7 @@ import kotlinx.coroutines.launch
 import me.parham1995.sms.BuildConfig
 import me.parham1995.sms.data.BackupStatus
 import me.parham1995.sms.data.Settings
+import me.parham1995.sms.data.ThemeChoice
 import me.parham1995.sms.messaging.DefaultSmsApp
 import me.parham1995.sms.ui.mutedText
 import java.text.DateFormat
@@ -124,6 +129,10 @@ fun SettingsScreen(
                 }
             }
 
+            Section("Look") {
+                Themes(current.theme, onChoose = viewModel::setTheme)
+            }
+
             Section("Messages") {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
@@ -181,6 +190,38 @@ fun SettingsScreen(
                     onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, BuildConfig.REPOSITORY.toUri())) },
                 ) {
                     Text(BuildConfig.REPOSITORY)
+                }
+            }
+        }
+    }
+}
+
+/** The four looks, one line each. */
+@Composable
+private fun Themes(
+    current: ThemeChoice,
+    onChoose: (ThemeChoice) -> Unit,
+) {
+    Column(Modifier.selectableGroup()) {
+        ThemeChoice.entries.forEach { choice ->
+            val (name, detail) =
+                when (choice) {
+                    ThemeChoice.DARK -> "Naz" to "notes-droid's dark theme, from naz.vim"
+                    ThemeChoice.LIGHT -> "Daylight" to "naz's colours on paper"
+                    ThemeChoice.SYSTEM -> "Follow the phone" to "Naz in dark mode, Daylight in light mode"
+                    ThemeChoice.WALLPAPER -> "Wallpaper" to "Material You, as in passwords-droid"
+                }
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .selectable(selected = choice == current, role = Role.RadioButton, onClick = { onChoose(choice) })
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                RadioButton(selected = choice == current, onClick = null)
+                Column(Modifier.padding(start = 12.dp)) {
+                    Text(name)
+                    Text(detail, style = MaterialTheme.typography.bodySmall, color = mutedText)
                 }
             }
         }

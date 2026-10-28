@@ -44,10 +44,28 @@ data class Settings(
     val adSenders: Set<String> = emptySet(),
     /** The ad senders as the last backup left them in git: the base the next sync merges against. */
     val adSendersSynced: Set<String> = emptySet(),
+    val theme: ThemeChoice = ThemeChoice.DARK,
 ) {
     val isConfigured: Boolean get() = remoteUrl.isNotBlank()
 
     val adRule: AdRule get() = AdRule(adSenders, callingCode)
+}
+
+/**
+ * How the app looks. [DARK] and [LIGHT] are notes-droid's naz and its light
+ * Daylight variant, [SYSTEM] picks between them by the phone's dark mode, and
+ * [WALLPAPER] is Material You from the wallpaper, as in passwords-droid.
+ */
+enum class ThemeChoice {
+    DARK,
+    LIGHT,
+    SYSTEM,
+    WALLPAPER,
+    ;
+
+    companion object {
+        fun parse(raw: String?): ThemeChoice = entries.firstOrNull { it.name == raw } ?: DARK
+    }
 }
 
 /** How the last backup went, for the settings screen. */
@@ -90,6 +108,7 @@ class SettingsStore
                 prefs[DELETE_ADS] = next.deleteAds
                 prefs[AD_SENDERS] = next.adSenders
                 prefs[AD_SENDERS_SYNCED] = next.adSendersSynced
+                prefs[THEME] = next.theme.name
             }
         }
 
@@ -141,6 +160,7 @@ class SettingsStore
                 deleteAds = this[DELETE_ADS] ?: defaults.deleteAds,
                 adSenders = this[AD_SENDERS] ?: defaults.adSenders,
                 adSendersSynced = this[AD_SENDERS_SYNCED] ?: defaults.adSendersSynced,
+                theme = ThemeChoice.parse(this[THEME]),
             )
         }
 
@@ -154,6 +174,7 @@ class SettingsStore
             val DELETE_ADS = booleanPreferencesKey("delete_ads")
             val AD_SENDERS = stringSetPreferencesKey("ad_senders")
             val AD_SENDERS_SYNCED = stringSetPreferencesKey("ad_senders_synced")
+            val THEME = stringPreferencesKey("theme")
             val BACKUP_AT = longPreferencesKey("backup_at")
             val BACKUP_ADDED = intPreferencesKey("backup_added")
             val BACKUP_ERROR = stringPreferencesKey("backup_error")

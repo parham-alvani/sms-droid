@@ -63,6 +63,7 @@ import me.parham1995.sms.ui.clockTime
 import me.parham1995.sms.ui.dayLabel
 import me.parham1995.sms.ui.dayOf
 import me.parham1995.sms.ui.mutedText
+import me.parham1995.sms.ui.theme.fontFor
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -268,7 +269,11 @@ private fun Bubble(
                                 onLongClick = { menu = true },
                             ),
                 ) {
-                    Text(message.body, modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp))
+                    Text(
+                        message.body,
+                        fontFamily = fontFor(message.body),
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    )
                 }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     DropdownMenuItem(text = { Text("Copy") }, onClick = {

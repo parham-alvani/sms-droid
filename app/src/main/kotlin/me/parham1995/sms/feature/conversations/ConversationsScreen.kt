@@ -68,6 +68,7 @@ import me.parham1995.sms.ui.DeleteConversationDialog
 import me.parham1995.sms.ui.DeletingDialog
 import me.parham1995.sms.ui.mutedText
 import me.parham1995.sms.ui.shortTime
+import me.parham1995.sms.ui.theme.fontFor
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -416,6 +417,7 @@ private fun ConversationLine(
                 }
                 Text(
                     conversation.snippet,
+                    fontFamily = fontFor(conversation.snippet),
                     style = MaterialTheme.typography.bodyMedium,
                     color = if (unread) MaterialTheme.colorScheme.onSurface else mutedText,
                     maxLines = 2,

@@ -11,6 +11,7 @@ An SMS app for Android 16 that does SMS only, and keeps every message in a git r
 - **Two SIMs.** A reply goes out on the SIM the conversation came in on, and the composer lets you choose.
 - **Delete ads.** An ad is a message with the opt-out line `لغو11`, or anything from a sender you marked "Treat as ads"; one-time codes never are. It arrives without a notification and is deleted once the backup has it. The backup files ads under `ads/`, apart from `messages/`, and keeps the ad senders in `ad-senders.txt`, which you can edit in git.
 - **Delete conversations** from the list (long press to select several) or the conversation. When a backup repository is set, a backup runs first, and nothing is deleted if it fails, so the backup keeps every deleted message.
+- **The naz theme** from notes-droid (dark, or Daylight on paper), with Persian set in Vazirmatn; or Material You from the wallpaper, as in passwords-droid. Settings > Look.
 - Reply and mark as read from the notification, delivery reports, and quick replies to a call.
 
 There is no MMS. The phone it is written for is on a network that has none.
