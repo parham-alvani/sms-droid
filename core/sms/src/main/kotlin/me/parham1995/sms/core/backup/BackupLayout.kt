@@ -5,7 +5,8 @@ import me.parham1995.sms.core.Addresses
 /**
  * Where a message goes in the backup repository: one file per address, under
  * [DIRECTORY], so `git log -- messages/+989121234567.jsonl` is one person's
- * history.
+ * history. Ads (by `AdRule`) go to a file of the same name under [ADS], out of
+ * the way of the messages; restore reads only [DIRECTORY].
  *
  * A number is filed under its normalized form, so the national and the
  * international spelling of one number share a file. A sender name is filed
@@ -17,6 +18,7 @@ import me.parham1995.sms.core.Addresses
  */
 object BackupLayout {
     const val DIRECTORY = "messages"
+    const val ADS = "ads"
     const val EXTENSION = ".jsonl"
 
     private val UNSAFE = Regex("""[^\p{L}\p{N}.+\-]+""")
@@ -25,7 +27,11 @@ object BackupLayout {
     fun pathFor(
         address: String,
         callingCode: String,
-    ): String = "$DIRECTORY/${fileName(address, callingCode)}$EXTENSION"
+    ): String = messagesPath(fileName(address, callingCode))
+
+    fun messagesPath(name: String): String = "$DIRECTORY/$name$EXTENSION"
+
+    fun adsPath(name: String): String = "$ADS/$name$EXTENSION"
 
     internal fun fileName(
         address: String,
@@ -45,4 +51,16 @@ object BackupLayout {
     }
 
     fun isBackupFile(path: String): Boolean = path.startsWith("$DIRECTORY/") && path.endsWith(EXTENSION)
+
+    /** The file name a path in [DIRECTORY] or [ADS] is for, or null for any other path. */
+    fun nameOf(path: String): String? {
+        if (!path.endsWith(EXTENSION)) return null
+        val name =
+            when {
+                path.startsWith("$DIRECTORY/") -> path.removePrefix("$DIRECTORY/")
+                path.startsWith("$ADS/") -> path.removePrefix("$ADS/")
+                else -> return null
+            }.removeSuffix(EXTENSION)
+        return name.takeIf { it.isNotEmpty() && '/' !in it }
+    }
 }

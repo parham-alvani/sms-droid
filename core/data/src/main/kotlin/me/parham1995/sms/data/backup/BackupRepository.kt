@@ -6,6 +6,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import me.parham1995.sms.core.AdRule
+import me.parham1995.sms.core.backup.AdSenders
 import me.parham1995.sms.core.backup.BackupFile
 import me.parham1995.sms.core.backup.BackupLayout
 import me.parham1995.sms.core.backup.BackupPlan
@@ -28,6 +30,10 @@ import javax.inject.Singleton
  * merges the phone's messages into it and pushes; when the push is rejected
  * because the remote moved, it starts again from the fetch, which is all the
  * conflict handling an add-only format needs.
+ *
+ * The ad senders travel too: each run merges the phone's list with
+ * [AdSenders.PATH] in git, files every line by the merged list (ads under
+ * `ads/`), and after the push the phone takes the merged list.
  *
  * One at a time: the worker and the "back up now" button drive the same
  * directory.
@@ -62,13 +68,37 @@ class BackupRepository
                 val phone = sms.forBackup()
                 repeat(PUSH_ATTEMPTS) {
                     git.refresh()
-                    val writes = BackupPlan.backup(phone, current.callingCode, git::read)
-                    withContext(Dispatchers.IO) { writes.forEach { git.write(it.path, it.text) } }
+                    val inGit = git.read(AdSenders.PATH)
+                    val senders =
+                        AdSenders.merge(
+                            current.adSendersSynced,
+                            current.adSenders,
+                            inGit?.let(AdSenders::parse).orEmpty(),
+                        )
+                    val existing = git.list(BackupLayout.DIRECTORY) + git.list(BackupLayout.ADS)
+                    val writes =
+                        BackupPlan.backup(
+                            phone,
+                            current.callingCode,
+                            AdRule(senders, current.callingCode),
+                            existing,
+                            git::read,
+                        )
+                    val sendersText = AdSenders.format(senders)
+                    withContext(Dispatchers.IO) {
+                        writes.forEach { write ->
+                            write.text?.let { git.write(write.path, it) }
+                                ?: git.delete(write.path)
+                        }
+                        if (sendersText != inGit.orEmpty()) git.write(AdSenders.PATH, sendersText)
+                    }
                     val added = writes.sumOf { it.added }
-                    if (writes.isNotEmpty()) git.commit(BackupPlan.commitMessage(added, writes.size), author(current))
+                    val conversations = writes.count { it.added > 0 }
+                    git.commit(BackupPlan.commitMessage(added, conversations), author(current))
                     if (git.push()) {
+                        settings.syncAdSenders(started = current.adSenders, pushed = senders)
                         settings.recordSuccess(System.currentTimeMillis(), added)
-                        return@withLock Result(added, writes.size)
+                        return@withLock Result(added, conversations)
                     }
                 }
                 throw PushRefused("the backup repository kept changing while this phone pushed")

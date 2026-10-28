@@ -53,6 +53,24 @@ class BackupGitTest {
         }
 
     @Test
+    fun `a removed file is committed and pushed as removed`() =
+        runTest {
+            val a = phone("a")
+            a.refresh()
+            a.write("messages/x.jsonl", "line\n")
+            a.commit("first", author)
+            a.delete("messages/x.jsonl")
+            a.write("ads/x.jsonl", "line\n")
+            assertThat(a.commit("moved", author)).isTrue()
+            assertThat(a.push()).isTrue()
+
+            val b = phone("b")
+            assertThat(b.refresh()).isTrue()
+            assertThat(b.list("messages")).isEmpty()
+            assertThat(b.list("ads")).containsExactly("ads/x.jsonl")
+        }
+
+    @Test
     fun `nothing to commit is not a commit`() =
         runTest {
             val git = phone("a")

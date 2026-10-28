@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import me.parham1995.sms.core.AdRule
 import me.parham1995.sms.core.Ads
+import me.parham1995.sms.core.backup.AdSenders
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -41,6 +42,8 @@ data class Settings(
     val deleteAds: Boolean = true,
     /** Senders whose every message is an ad, by `Ads.senderKey`. */
     val adSenders: Set<String> = emptySet(),
+    /** The ad senders as the last backup left them in git: the base the next sync merges against. */
+    val adSendersSynced: Set<String> = emptySet(),
 ) {
     val isConfigured: Boolean get() = remoteUrl.isNotBlank()
 
@@ -86,6 +89,7 @@ class SettingsStore
                 prefs[DELIVERY_REPORTS] = next.deliveryReports
                 prefs[DELETE_ADS] = next.deleteAds
                 prefs[AD_SENDERS] = next.adSenders
+                prefs[AD_SENDERS_SYNCED] = next.adSendersSynced
             }
         }
 
@@ -96,6 +100,18 @@ class SettingsStore
         ) = update {
             val key = Ads.senderKey(address, it.callingCode)
             it.copy(adSenders = if (isAd) it.adSenders + key else it.adSenders - key)
+        }
+
+        /**
+         * After a push that left [pushed] in git: the phone takes it, keeping
+         * what changed on the phone since [started] (its list when the backup
+         * read it), and [pushed] is the base for the next sync.
+         */
+        suspend fun syncAdSenders(
+            started: Set<String>,
+            pushed: Set<String>,
+        ) = update {
+            it.copy(adSenders = AdSenders.merge(started, it.adSenders, pushed), adSendersSynced = pushed)
         }
 
         suspend fun recordSuccess(
@@ -124,6 +140,7 @@ class SettingsStore
                 deliveryReports = this[DELIVERY_REPORTS] ?: defaults.deliveryReports,
                 deleteAds = this[DELETE_ADS] ?: defaults.deleteAds,
                 adSenders = this[AD_SENDERS] ?: defaults.adSenders,
+                adSendersSynced = this[AD_SENDERS_SYNCED] ?: defaults.adSendersSynced,
             )
         }
 
@@ -136,6 +153,7 @@ class SettingsStore
             val DELIVERY_REPORTS = booleanPreferencesKey("delivery_reports")
             val DELETE_ADS = booleanPreferencesKey("delete_ads")
             val AD_SENDERS = stringSetPreferencesKey("ad_senders")
+            val AD_SENDERS_SYNCED = stringSetPreferencesKey("ad_senders_synced")
             val BACKUP_AT = longPreferencesKey("backup_at")
             val BACKUP_ADDED = intPreferencesKey("backup_added")
             val BACKUP_ERROR = stringPreferencesKey("backup_error")

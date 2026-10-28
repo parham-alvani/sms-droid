@@ -129,7 +129,13 @@ class BackupGit(
         check(tmp.renameTo(file)) { "could not write $path" }
     }
 
-    /** Stages everything and commits it. Returns false when there was nothing to commit. */
+    /** Removes a file from the work tree; the next [commit] stages the removal. */
+    fun delete(path: String) {
+        val file = File(workTree, path)
+        check(!file.exists() || file.delete()) { "could not remove $path" }
+    }
+
+    /** Stages everything, removals included, and commits it. Returns false when there was nothing to commit. */
     suspend fun commit(
         message: String,
         author: PersonIdent,
@@ -137,6 +143,12 @@ class BackupGit(
         withContext(Dispatchers.IO) {
             open().use { git ->
                 git.add().addFilepattern(".").call()
+                // A plain add stages new and changed files only; update stages removals.
+                git
+                    .add()
+                    .addFilepattern(".")
+                    .setUpdate(true)
+                    .call()
                 if (git.status().call().isClean) return@use false
                 git
                     .commit()
