@@ -135,6 +135,18 @@ fun SettingsScreen(
                     }
                     Switch(checked = current.deliveryReports, onCheckedChange = viewModel::setDeliveryReports)
                 }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Delete ads")
+                        Text(
+                            "An ad is a message with the opt-out line لغو11 and no one-time code. It arrives " +
+                                "without a notification and is deleted after the next backup, which keeps it.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = mutedText,
+                        )
+                    }
+                    Switch(checked = current.deleteAds, onCheckedChange = viewModel::setDeleteAds)
+                }
                 CallingCode(current, onSave = viewModel::saveCallingCode)
             }
 

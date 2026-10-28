@@ -77,7 +77,7 @@ fun ThreadScreen(
     LaunchedEffect(state.deleted) { if (state.deleted) onBack() }
     if (confirmDelete) {
         DeleteConversationDialog(
-            name = state.name,
+            title = "Delete the conversation with ${state.name}?",
             keepsBackup = keepsBackup,
             onConfirm = {
                 confirmDelete = false

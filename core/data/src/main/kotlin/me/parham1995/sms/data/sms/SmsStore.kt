@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.withContext
+import me.parham1995.sms.core.Ads
 import me.parham1995.sms.core.backup.BackupMessage
 import java.time.Instant
 import javax.inject.Inject
@@ -65,8 +66,9 @@ class SmsStore
                 query(Sms.CONTENT_URI, null, null, "${Sms.DATE} DESC") { message ->
                     val known = byThread[message.threadId]
                     val unread = if (message.isIncoming && !message.read) 1 else 0
+                    val ad = if (message.isAd) 1 else 0
                     byThread[message.threadId] =
-                        known?.copy(unread = known.unread + unread)
+                        known?.copy(unread = known.unread + unread, ads = known.ads + ad)
                             ?: Conversation(
                                 threadId = message.threadId,
                                 address = message.address,
@@ -74,6 +76,7 @@ class SmsStore
                                 date = message.date,
                                 unread = unread,
                                 lastFailed = message.isFailed,
+                                ads = ad,
                             )
                 }
                 byThread.values.toList()
@@ -107,8 +110,10 @@ class SmsStore
             date: Long,
             dateSent: Long,
             subscriptionId: Int,
+            read: Boolean = false,
         ): Uri? =
             withContext(Dispatchers.IO) {
+                val flag = if (read) 1 else 0
                 resolver.insert(
                     Sms.Inbox.CONTENT_URI,
                     contentValuesOf(
@@ -116,8 +121,8 @@ class SmsStore
                         Sms.BODY to body,
                         Sms.DATE to date,
                         Sms.DATE_SENT to dateSent,
-                        Sms.READ to 0,
-                        Sms.SEEN to 0,
+                        Sms.READ to flag,
+                        Sms.SEEN to flag,
                         Sms.SUBSCRIPTION_ID to subscriptionId,
                     ),
                 )
@@ -175,6 +180,34 @@ class SmsStore
         suspend fun deleteThread(threadId: Long) =
             withContext(Dispatchers.IO) {
                 resolver.delete(ContentUris.withAppendedId(Threads.CONTENT_URI, threadId), null, null)
+            }
+
+        /** Received ads (by [Ads]) that arrived at or before [upTo], epoch millis. */
+        suspend fun adIds(upTo: Long): List<Long> =
+            withContext(Dispatchers.IO) {
+                buildList {
+                    query(
+                        Sms.CONTENT_URI,
+                        "${Sms.TYPE} = ? AND ${Sms.DATE} <= ?",
+                        arrayOf(Sms.MESSAGE_TYPE_INBOX.toString(), upTo.toString()),
+                        null,
+                    ) { if (it.isAd) add(it.id) }
+                }
+            }
+
+        /**
+         * Deletes messages by id. The provider drops a thread once its last
+         * message goes. Returns how many rows went.
+         */
+        suspend fun deleteMessages(ids: Collection<Long>): Int =
+            withContext(Dispatchers.IO) {
+                ids.chunked(DELETE_CHUNK).sumOf { chunk ->
+                    resolver.delete(
+                        Sms.CONTENT_URI,
+                        "${Sms._ID} IN (${chunk.joinToString(",") { "?" }})",
+                        chunk.map(Long::toString).toTypedArray(),
+                    )
+                }
             }
 
         /** Every message worth keeping, as the backup writes it: received and sent, not drafts or failures. */
@@ -270,6 +303,9 @@ class SmsStore
             val MMS_SMS: Uri = "content://mms-sms/".toUri()
             const val RESTORE_CHUNK = 200
 
+            /** Below SQLite's limit on bound arguments. */
+            const val DELETE_CHUNK = 500
+
             val PROJECTION =
                 arrayOf(
                     Sms._ID,
@@ -294,6 +330,8 @@ data class Conversation(
     val date: Long,
     val unread: Int,
     val lastFailed: Boolean,
+    /** How many of its messages are ads, which the ad cleanup deletes. */
+    val ads: Int = 0,
 )
 
 data class Message(
@@ -312,4 +350,5 @@ data class Message(
     val isFailed: Boolean get() = type == Sms.MESSAGE_TYPE_FAILED
     val isPending: Boolean get() = type == Sms.MESSAGE_TYPE_OUTBOX || type == Sms.MESSAGE_TYPE_QUEUED
     val isDelivered: Boolean get() = status == Sms.STATUS_COMPLETE
+    val isAd: Boolean get() = isIncoming && Ads.isAd(body)
 }

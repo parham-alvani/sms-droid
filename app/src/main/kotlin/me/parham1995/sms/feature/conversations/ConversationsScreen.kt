@@ -1,9 +1,11 @@
 package me.parham1995.sms.feature.conversations
 
 import android.Manifest
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,11 +14,16 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
@@ -62,7 +69,7 @@ import me.parham1995.sms.ui.DeletingDialog
 import me.parham1995.sms.ui.mutedText
 import me.parham1995.sms.ui.shortTime
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ConversationsScreen(
     onOpen: (threadId: Long, address: String) -> Unit,
@@ -74,8 +81,18 @@ fun ConversationsScreen(
     val query by viewModel.query.collectAsStateWithLifecycle()
     val keepsBackup by viewModel.keepsBackup.collectAsStateWithLifecycle()
     var searching by rememberSaveable { mutableStateOf(false) }
-    var toDelete by remember { mutableStateOf<ConversationsViewModel.Item?>(null) }
+    var selected by rememberSaveable { mutableStateOf(emptySet<Long>()) }
+    var confirmDelete by remember { mutableStateOf(false) }
+    var confirmAds by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val selecting = selected.isNotEmpty()
+
+    // A thread that went (deleted here, or elsewhere) is no longer selected.
+    LaunchedEffect(state.items) {
+        val ids = state.items?.mapTo(HashSet()) { it.conversation.threadId } ?: return@LaunchedEffect
+        if (!ids.containsAll(selected)) selected = selected intersect ids
+    }
+    BackHandler(enabled = selecting) { selected = emptySet() }
 
     val permissions =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { viewModel.recheck() }
@@ -99,62 +116,95 @@ fun ConversationsScreen(
         }
     }
 
-    toDelete?.let { item ->
+    if (confirmDelete && selecting) {
+        val one = selected.singleOrNull()?.let { id -> state.items?.find { it.conversation.threadId == id } }
         DeleteConversationDialog(
-            name = item.name,
+            title =
+                if (one !=
+                    null
+                ) {
+                    "Delete the conversation with ${one.name}?"
+                } else {
+                    "Delete ${selected.size} conversations?"
+                },
             keepsBackup = keepsBackup,
             onConfirm = {
-                toDelete = null
-                viewModel.delete(item.conversation.threadId)
+                confirmDelete = false
+                viewModel.delete(selected)
+                selected = emptySet()
             },
-            onDismiss = { toDelete = null },
+            onDismiss = { confirmDelete = false },
+        )
+    }
+    if (confirmAds) {
+        DeleteConversationDialog(
+            title = if (state.ads == 1) "Delete 1 ad?" else "Delete ${state.ads} ads?",
+            keepsBackup = keepsBackup,
+            onConfirm = {
+                confirmAds = false
+                viewModel.deleteAds()
+            },
+            onDismiss = { confirmAds = false },
         )
     }
     if (state.deleting) DeletingDialog()
-    state.error?.let { error ->
+    state.message?.let { message ->
         AlertDialog(
-            onDismissRequest = viewModel::dismissError,
-            confirmButton = { TextButton(onClick = viewModel::dismissError) { Text("OK") } },
-            text = { Text(error) },
+            onDismissRequest = viewModel::dismissMessage,
+            confirmButton = { TextButton(onClick = viewModel::dismissMessage) { Text("OK") } },
+            text = { Text(message) },
         )
     }
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    if (searching) {
-                        TextField(
-                            value = query,
-                            onValueChange = { viewModel.query.value = it },
-                            placeholder = { Text("Search") },
-                            singleLine = true,
-                            colors =
-                                TextFieldDefaults.colors(
-                                    focusedContainerColor = Color.Transparent,
-                                    unfocusedContainerColor = Color.Transparent,
-                                ),
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    } else {
-                        Text("Messages")
-                    }
-                },
-                actions = {
-                    if (searching) {
-                        IconButton(onClick = {
-                            searching = false
-                            viewModel.query.value = ""
-                        }) { Icon(Icons.Filled.Close, "Close search") }
-                    } else {
-                        IconButton(onClick = { searching = true }) { Icon(Icons.Filled.Search, "Search") }
-                    }
-                    IconButton(onClick = onSettings) { Icon(Icons.Filled.Settings, "Settings") }
-                },
-            )
+            if (selecting) {
+                SelectionBar(
+                    count = selected.size,
+                    onClear = { selected = emptySet() },
+                    onSelectAll = {
+                        selected = state.items.orEmpty().mapTo(LinkedHashSet()) { it.conversation.threadId }
+                    },
+                    allSelected = selected.size == state.items?.size,
+                    onDelete = { confirmDelete = true },
+                )
+            } else {
+                TopAppBar(
+                    title = {
+                        if (searching) {
+                            TextField(
+                                value = query,
+                                onValueChange = { viewModel.query.value = it },
+                                placeholder = { Text("Search") },
+                                singleLine = true,
+                                colors =
+                                    TextFieldDefaults.colors(
+                                        focusedContainerColor = Color.Transparent,
+                                        unfocusedContainerColor = Color.Transparent,
+                                    ),
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        } else {
+                            Text("Messages")
+                        }
+                    },
+                    actions = {
+                        if (searching) {
+                            IconButton(onClick = {
+                                searching = false
+                                viewModel.query.value = ""
+                            }) { Icon(Icons.Filled.Close, "Close search") }
+                        } else {
+                            IconButton(onClick = { searching = true }) { Icon(Icons.Filled.Search, "Search") }
+                        }
+                        IconButton(onClick = onSettings) { Icon(Icons.Filled.Settings, "Settings") }
+                        if (state.ads > 0) Overflow(ads = state.ads, onDeleteAds = { confirmAds = true })
+                    },
+                )
+            }
         },
         floatingActionButton = {
-            if (state.isDefault) {
+            if (state.isDefault && !selecting) {
                 ExtendedFloatingActionButton(
                     onClick = onNew,
                     icon = { Icon(Icons.Filled.Add, null) },
@@ -182,10 +232,25 @@ fun ConversationsScreen(
                 else ->
                     LazyColumn(Modifier.fillMaxSize()) {
                         items(items, key = { it.conversation.threadId }) { item ->
-                            ConversationRow(
+                            val id = item.conversation.threadId
+                            val toggle = { selected = if (id in selected) selected - id else selected + id }
+                            ConversationLine(
                                 item,
-                                onClick = { onOpen(item.conversation.threadId, item.conversation.address) },
-                                onDelete = { toDelete = item },
+                                selected = id in selected,
+                                modifier =
+                                    Modifier.combinedClickable(
+                                        onClick = {
+                                            if (selecting) {
+                                                toggle()
+                                            } else {
+                                                onOpen(
+                                                    id,
+                                                    item.conversation.address,
+                                                )
+                                            }
+                                        },
+                                        onLongClick = toggle,
+                                    ),
                             )
                         }
                     }
@@ -213,30 +278,47 @@ private fun NotDefault(onSwitch: () -> Unit) {
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+/** The top bar while conversations are selected: how many, select all, delete. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ConversationRow(
-    item: ConversationsViewModel.Item,
-    onClick: () -> Unit,
+private fun SelectionBar(
+    count: Int,
+    allSelected: Boolean,
+    onClear: () -> Unit,
+    onSelectAll: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    val conversation = item.conversation
-    val unread = conversation.unread > 0
-    var menu by remember { mutableStateOf(false) }
+    TopAppBar(
+        navigationIcon = { IconButton(onClick = onClear) { Icon(Icons.Filled.Close, "Clear selection") } },
+        title = { Text("$count selected") },
+        actions = {
+            if (!allSelected) TextButton(onClick = onSelectAll) { Text("Select all") }
+            IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, "Delete") }
+        },
+    )
+}
+
+@Composable
+private fun Overflow(
+    ads: Int,
+    onDeleteAds: () -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
     Box {
-        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-            DropdownMenuItem(text = { Text("Delete") }, onClick = {
-                menu = false
-                onDelete()
+        IconButton(onClick = { open = true }) { Icon(Icons.Filled.MoreVert, "More") }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(text = { Text("Delete ads ($ads)") }, onClick = {
+                open = false
+                onDeleteAds()
             })
         }
-        ConversationLine(item, Modifier.combinedClickable(onClick = onClick, onLongClick = { menu = true }))
     }
 }
 
 @Composable
 private fun ConversationLine(
     item: ConversationsViewModel.Item,
+    selected: Boolean,
     modifier: Modifier,
 ) {
     val conversation = item.conversation
@@ -244,11 +326,21 @@ private fun ConversationLine(
     Row(
         modifier
             .fillMaxWidth()
+            .background(if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Avatar(item.name, conversation.address, item.photoUri)
+        if (selected) {
+            Box(
+                Modifier
+                    .size(44.dp)
+                    .background(MaterialTheme.colorScheme.primary, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.Filled.Check, null, tint = MaterialTheme.colorScheme.onPrimary) }
+        } else {
+            Avatar(item.name, conversation.address, item.photoUri)
+        }
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(

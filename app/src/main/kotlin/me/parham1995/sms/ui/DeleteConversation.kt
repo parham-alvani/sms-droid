@@ -11,17 +11,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 
-/** Asks before a conversation goes, and says whether the backup still has it. */
+/** Asks before messages go, and says whether the backup still has them. */
 @Composable
 fun DeleteConversationDialog(
-    name: String,
+    title: String,
     keepsBackup: Boolean,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Delete the conversation with $name?") },
+        title = { Text(title) },
         text = {
             Text(
                 if (keepsBackup) {

@@ -16,6 +16,7 @@ import me.parham1995.sms.data.BackupStatus
 import me.parham1995.sms.data.Settings
 import me.parham1995.sms.data.SettingsStore
 import me.parham1995.sms.data.backup.BackupRepository
+import me.parham1995.sms.data.backup.BackupWorker
 import me.parham1995.sms.data.git.SshKeyStore
 import me.parham1995.sms.data.reason
 import me.parham1995.sms.data.runCatchingUnlessCancelled
@@ -68,6 +69,13 @@ class SettingsViewModel
             viewModelScope.launch { store.update { it.copy(callingCode = code.trim().removePrefix("+")) } }
 
         fun setDeliveryReports(on: Boolean) = viewModelScope.launch { store.update { it.copy(deliveryReports = on) } }
+
+        /** Turning it on clears the ads already on the phone with the next backup. */
+        fun setDeleteAds(on: Boolean) =
+            viewModelScope.launch {
+                store.update { it.copy(deleteAds = on) }
+                if (on) BackupWorker.scheduleSoon(context)
+            }
 
         fun generateKey() =
             viewModelScope.launch {

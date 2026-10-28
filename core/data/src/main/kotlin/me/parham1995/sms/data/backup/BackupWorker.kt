@@ -24,7 +24,8 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Runs [BackupRepository.backup] in the background: once a day, and a few
- * minutes after a message arrives or is sent.
+ * minutes after a message arrives or is sent. When ads are to go, the run is
+ * [ConversationDeleter.deleteAds], which backs up first.
  *
  * The delay after a message is there to batch: a conversation of ten quick
  * messages is one commit, not ten. KEEP, so a message that arrives while a
@@ -38,10 +39,14 @@ class BackupWorker
         @Assisted context: Context,
         @Assisted params: WorkerParameters,
         private val backups: BackupRepository,
+        private val deleter: ConversationDeleter,
         private val settings: SettingsStore,
     ) : CoroutineWorker(context, params) {
         override suspend fun doWork(): Result {
-            val outcome = runCatchingUnlessCancelled { backups.backup() }
+            val outcome =
+                runCatchingUnlessCancelled {
+                    if (settings.current().deleteAds) deleter.deleteAds() else backups.backup()
+                }
             val error = outcome.exceptionOrNull() ?: return Result.success()
             Log.w(TAG, "backup failed", error)
             settings.recordFailure(error.reason())

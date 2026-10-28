@@ -12,8 +12,11 @@ import android.util.Log
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import me.parham1995.sms.core.Ads
 import me.parham1995.sms.data.ApplicationScope
+import me.parham1995.sms.data.SettingsStore
 import me.parham1995.sms.data.backup.BackupWorker
+import me.parham1995.sms.data.runCatchingUnlessCancelled
 import me.parham1995.sms.data.sms.SmsStore
 import javax.inject.Inject
 
@@ -43,6 +46,8 @@ private fun BroadcastReceiver.work(
 class SmsDeliverReceiver : BroadcastReceiver() {
     @Inject lateinit var store: SmsStore
 
+    @Inject lateinit var settings: SettingsStore
+
     @Inject lateinit var notifications: Notifications
 
     @Inject @ApplicationScope
@@ -69,6 +74,10 @@ class SmsDeliverReceiver : BroadcastReceiver() {
             // parts share a sender.
             val address = parts.first().displayOriginatingAddress.orEmpty()
             val body = parts.joinToString("") { it.displayMessageBody.orEmpty() }
+            // An ad that is going to be deleted is stored read and stays quiet;
+            // the backup that runs soon takes it first.
+            val quiet =
+                Ads.isAd(body) && runCatchingUnlessCancelled { settings.current().deleteAds }.getOrDefault(false)
             val uri =
                 store.insertIncoming(
                     address = address,
@@ -76,9 +85,12 @@ class SmsDeliverReceiver : BroadcastReceiver() {
                     date = System.currentTimeMillis(),
                     dateSent = parts.first().timestampMillis,
                     subscriptionId = subscriptionId,
+                    read = quiet,
                 )
-            val threadId = uri?.let { store.message(it)?.threadId } ?: store.threadIdFor(address)
-            notifications.showIncoming(threadId)
+            if (!quiet) {
+                val threadId = uri?.let { store.message(it)?.threadId } ?: store.threadIdFor(address)
+                notifications.showIncoming(threadId)
+            }
             BackupWorker.scheduleSoon(context)
         }
     }

@@ -31,6 +31,11 @@ data class Settings(
      */
     val callingCode: String = "98",
     val deliveryReports: Boolean = false,
+    /**
+     * Deletes every ad (by `Ads`) once it is backed up, and stores a new one
+     * as read, without a notification.
+     */
+    val deleteAds: Boolean = true,
 ) {
     val isConfigured: Boolean get() = remoteUrl.isNotBlank()
 }
@@ -72,6 +77,7 @@ class SettingsStore
                 prefs[AUTHOR_EMAIL] = next.authorEmail
                 prefs[CALLING_CODE] = next.callingCode
                 prefs[DELIVERY_REPORTS] = next.deliveryReports
+                prefs[DELETE_ADS] = next.deleteAds
             }
         }
 
@@ -99,6 +105,7 @@ class SettingsStore
                 authorEmail = this[AUTHOR_EMAIL] ?: defaults.authorEmail,
                 callingCode = this[CALLING_CODE] ?: defaults.callingCode,
                 deliveryReports = this[DELIVERY_REPORTS] ?: defaults.deliveryReports,
+                deleteAds = this[DELETE_ADS] ?: defaults.deleteAds,
             )
         }
 
@@ -109,6 +116,7 @@ class SettingsStore
             val AUTHOR_EMAIL = stringPreferencesKey("author_email")
             val CALLING_CODE = stringPreferencesKey("calling_code")
             val DELIVERY_REPORTS = booleanPreferencesKey("delivery_reports")
+            val DELETE_ADS = booleanPreferencesKey("delete_ads")
             val BACKUP_AT = longPreferencesKey("backup_at")
             val BACKUP_ADDED = intPreferencesKey("backup_added")
             val BACKUP_ERROR = stringPreferencesKey("backup_error")

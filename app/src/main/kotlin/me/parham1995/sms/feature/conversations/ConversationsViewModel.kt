@@ -45,13 +45,16 @@ class ConversationsViewModel
         data class State(
             val isDefault: Boolean,
             val items: List<Item>? = null,
+            /** Ads on the phone, in every conversation, whatever the search. */
+            val ads: Int = 0,
             val deleting: Boolean = false,
-            val error: String? = null,
+            /** What the last delete did, or why it did not. */
+            val message: String? = null,
         )
 
         private data class Action(
             val deleting: Boolean = false,
-            val error: String? = null,
+            val message: String? = null,
         )
 
         private val action = MutableStateFlow(Action())
@@ -87,7 +90,13 @@ class ConversationsViewModel
                                 ) ||
                                 it.conversation.snippet.contains(q, true)
                         }
-                State(isDefault = allowed, items = items, deleting = action.deleting, error = action.error)
+                State(
+                    isDefault = allowed,
+                    items = items,
+                    ads = list.sumOf { it.ads },
+                    deleting = action.deleting,
+                    message = action.message,
+                )
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_MILLIS), State(isDefault = isDefault.value))
 
         /** After the role dialog or a permission dialog: either may have changed what is allowed. */
@@ -96,14 +105,22 @@ class ConversationsViewModel
             contacts.refresh()
         }
 
-        fun delete(threadId: Long) =
-            viewModelScope.launch {
-                action.value = Action(deleting = true)
-                val result = runCatchingUnlessCancelled { deleter.delete(threadId) }
-                action.value = Action(error = result.exceptionOrNull()?.let { "Not deleted: ${it.reason()}" })
-            }
+        fun delete(threadIds: Collection<Long>) = run(done = { null }) { deleter.delete(threadIds) }
 
-        fun dismissError() = action.update { it.copy(error = null) }
+        fun deleteAds() =
+            run(done = { count -> if (count == 1) "Deleted 1 ad" else "Deleted $count ads" }) { deleter.deleteAds() }
+
+        fun dismissMessage() = action.update { it.copy(message = null) }
+
+        private fun <T> run(
+            done: (T) -> String?,
+            block: suspend () -> T,
+        ) = viewModelScope.launch {
+            action.value = Action(deleting = true)
+            val result = runCatchingUnlessCancelled { block() }
+            action.value =
+                Action(message = result.fold(done) { "Not deleted: ${it.reason()}" })
+        }
 
         private companion object {
             const val STOP_MILLIS = 5_000L
