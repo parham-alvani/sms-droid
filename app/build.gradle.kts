@@ -50,8 +50,8 @@ android {
         applicationId = "me.parham1995.sms"
         // Literals on purpose: F-Droid reads them with a regex. `just bump`
         // keeps them in step; CI refuses a tag that disagrees.
-        versionCode = 200
-        versionName = "0.2.0"
+        versionCode = 300
+        versionName = "0.3.0"
 
         buildConfigField("String", "GIT_SHA", "\"${gitValue("rev-parse", "--short", "HEAD").ifEmpty { "unknown" }}\"")
         buildConfigField("String", "REPOSITORY", "\"https://github.com/parham-alvani/sms-droid\"")

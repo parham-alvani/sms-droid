@@ -1,0 +1,1 @@
+Back up the call log to git, one file per number under calls/, a few minutes after each call. Calls are not restored.
