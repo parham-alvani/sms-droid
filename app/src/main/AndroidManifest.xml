@@ -110,6 +110,19 @@
             </intent-filter>
         </service>
 
+        <!--
+            Rejects calls from blocked numbers. Android binds it only while this
+            app holds the call screening role, which settings asks for.
+        -->
+        <service
+            android:name=".messaging.CallScreener"
+            android:exported="true"
+            android:permission="android.permission.BIND_SCREENING_SERVICE">
+            <intent-filter>
+                <action android:name="android.telecom.CallScreeningService" />
+            </intent-filter>
+        </service>
+
         <!-- Answers from the radio about what this app sent, and the notification's buttons. -->
         <receiver
             android:name=".messaging.SentReceiver"

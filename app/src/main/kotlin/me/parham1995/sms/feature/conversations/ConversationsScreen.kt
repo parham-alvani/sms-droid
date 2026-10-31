@@ -64,6 +64,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.parham1995.sms.messaging.DefaultSmsApp
 import me.parham1995.sms.ui.Avatar
+import me.parham1995.sms.ui.BlockDialog
 import me.parham1995.sms.ui.DeleteConversationDialog
 import me.parham1995.sms.ui.DeletingDialog
 import me.parham1995.sms.ui.mutedText
@@ -86,6 +87,7 @@ fun ConversationsScreen(
     var confirmDelete by remember { mutableStateOf(false) }
     var confirmAds by remember { mutableStateOf(false) }
     var confirmAdSenders by remember { mutableStateOf(false) }
+    var confirmBlock by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val selecting = selected.isNotEmpty()
 
@@ -150,6 +152,18 @@ fun ConversationsScreen(
             onDismiss = { confirmAdSenders = false },
         )
     }
+    if (confirmBlock && selecting) {
+        val chosen = state.items.orEmpty().filter { it.conversation.threadId in selected }
+        BlockDialog(
+            title = chosen.singleOrNull()?.let { "Block ${it.name}?" } ?: "Block ${chosen.size} senders?",
+            onConfirm = {
+                confirmBlock = false
+                viewModel.block(chosen.map { it.conversation.address })
+                selected = emptySet()
+            },
+            onDismiss = { confirmBlock = false },
+        )
+    }
     if (confirmAds) {
         DeleteConversationDialog(
             title = if (state.ads == 1) "Delete 1 ad?" else "Delete ${state.ads} ads?",
@@ -182,6 +196,7 @@ fun ConversationsScreen(
                     allSelected = selected.size == state.items?.size,
                     onDelete = { confirmDelete = true },
                     onMarkAds = { confirmAdSenders = true },
+                    onBlock = { confirmBlock = true },
                 )
             } else {
                 TopAppBar(
@@ -293,7 +308,7 @@ private fun NotDefault(onSwitch: () -> Unit) {
     }
 }
 
-/** The top bar while conversations are selected: how many, select all, delete. */
+/** The top bar while conversations are selected: how many, select all, delete, ads and blocking. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SelectionBar(
@@ -303,6 +318,7 @@ private fun SelectionBar(
     onSelectAll: () -> Unit,
     onDelete: () -> Unit,
     onMarkAds: () -> Unit,
+    onBlock: () -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
     TopAppBar(
@@ -317,6 +333,10 @@ private fun SelectionBar(
                     DropdownMenuItem(text = { Text("Treat senders as ads") }, onClick = {
                         open = false
                         onMarkAds()
+                    })
+                    DropdownMenuItem(text = { Text("Block senders") }, onClick = {
+                        open = false
+                        onBlock()
                     })
                 }
             }

@@ -182,10 +182,10 @@ class SmsStore
                 resolver.delete(ContentUris.withAppendedId(Threads.CONTENT_URI, threadId), null, null)
             }
 
-        /** Received ads (by [ads]) that arrived at or before [upTo], epoch millis. */
-        suspend fun adIds(
+        /** Received messages that [matches] and that arrived at or before [upTo], epoch millis. */
+        suspend fun incomingIds(
             upTo: Long,
-            ads: AdRule,
+            matches: (address: String, body: String) -> Boolean,
         ): List<Long> =
             withContext(Dispatchers.IO) {
                 buildList {
@@ -194,7 +194,7 @@ class SmsStore
                         "${Sms.TYPE} = ? AND ${Sms.DATE} <= ?",
                         arrayOf(Sms.MESSAGE_TYPE_INBOX.toString(), upTo.toString()),
                         null,
-                    ) { if (ads.isAd(it.address, it.body)) add(it.id) }
+                    ) { if (matches(it.address, it.body)) add(it.id) }
                 }
             }
 

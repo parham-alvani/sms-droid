@@ -15,7 +15,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import me.parham1995.sms.core.AdRule
 import me.parham1995.sms.core.Ads
+import me.parham1995.sms.core.BlockRule
+import me.parham1995.sms.core.Blocking
 import me.parham1995.sms.core.backup.AdSenders
+import me.parham1995.sms.core.backup.BlockedSenders
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -44,11 +47,21 @@ data class Settings(
     val adSenders: Set<String> = emptySet(),
     /** The ad senders as the last backup left them in git: the base the next sync merges against. */
     val adSendersSynced: Set<String> = emptySet(),
+    /**
+     * Blocked senders and number ranges, by `Blocking.entry`. Their messages
+     * arrive quietly and go after the next backup; their calls are rejected
+     * by `CallScreener`.
+     */
+    val blocked: Set<String> = emptySet(),
+    /** The blocked list as the last backup left it in git, like [adSendersSynced]. */
+    val blockedSynced: Set<String> = emptySet(),
     val theme: ThemeChoice = ThemeChoice.DARK,
 ) {
     val isConfigured: Boolean get() = remoteUrl.isNotBlank()
 
     val adRule: AdRule get() = AdRule(adSenders, callingCode)
+
+    val blockRule: BlockRule get() = BlockRule(blocked, callingCode)
 }
 
 /**
@@ -108,6 +121,8 @@ class SettingsStore
                 prefs[DELETE_ADS] = next.deleteAds
                 prefs[AD_SENDERS] = next.adSenders
                 prefs[AD_SENDERS_SYNCED] = next.adSendersSynced
+                prefs[BLOCKED] = next.blocked
+                prefs[BLOCKED_SYNCED] = next.blockedSynced
                 prefs[THEME] = next.theme.name
             }
         }
@@ -122,15 +137,39 @@ class SettingsStore
         }
 
         /**
-         * After a push that left [pushed] in git: the phone takes it, keeping
-         * what changed on the phone since [started] (its list when the backup
-         * read it), and [pushed] is the base for the next sync.
+         * Blocks [text] -- a number, a sender name, or a range such as `0942*`
+         * -- or unblocks it. Returns the entry as it is stored.
          */
-        suspend fun syncAdSenders(
-            started: Set<String>,
-            pushed: Set<String>,
+        suspend fun setBlocked(
+            text: String,
+            isBlocked: Boolean,
+        ): String {
+            var entry = ""
+            update {
+                entry = Blocking.entry(text, it.callingCode)
+                it.copy(blocked = if (isBlocked) it.blocked + entry else it.blocked - entry)
+            }
+            return entry
+        }
+
+        /**
+         * After a push that left [ads] and [blocked] in git: the phone takes
+         * each list, keeping what changed on the phone since the backup read
+         * it ([adsStarted], [blockedStarted]), and what was pushed is the base
+         * for the next sync.
+         */
+        suspend fun syncLists(
+            adsStarted: Set<String>,
+            ads: Set<String>,
+            blockedStarted: Set<String>,
+            blocked: Set<String>,
         ) = update {
-            it.copy(adSenders = AdSenders.merge(started, it.adSenders, pushed), adSendersSynced = pushed)
+            it.copy(
+                adSenders = AdSenders.merge(adsStarted, it.adSenders, ads),
+                adSendersSynced = ads,
+                blocked = BlockedSenders.merge(blockedStarted, it.blocked, blocked),
+                blockedSynced = blocked,
+            )
         }
 
         suspend fun recordSuccess(
@@ -160,6 +199,8 @@ class SettingsStore
                 deleteAds = this[DELETE_ADS] ?: defaults.deleteAds,
                 adSenders = this[AD_SENDERS] ?: defaults.adSenders,
                 adSendersSynced = this[AD_SENDERS_SYNCED] ?: defaults.adSendersSynced,
+                blocked = this[BLOCKED] ?: defaults.blocked,
+                blockedSynced = this[BLOCKED_SYNCED] ?: defaults.blockedSynced,
                 theme = ThemeChoice.parse(this[THEME]),
             )
         }
@@ -174,6 +215,8 @@ class SettingsStore
             val DELETE_ADS = booleanPreferencesKey("delete_ads")
             val AD_SENDERS = stringSetPreferencesKey("ad_senders")
             val AD_SENDERS_SYNCED = stringSetPreferencesKey("ad_senders_synced")
+            val BLOCKED = stringSetPreferencesKey("blocked")
+            val BLOCKED_SYNCED = stringSetPreferencesKey("blocked_synced")
             val THEME = stringPreferencesKey("theme")
             val BACKUP_AT = longPreferencesKey("backup_at")
             val BACKUP_ADDED = intPreferencesKey("backup_added")

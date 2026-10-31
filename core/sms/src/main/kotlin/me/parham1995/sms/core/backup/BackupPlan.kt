@@ -1,6 +1,7 @@
 package me.parham1995.sms.core.backup
 
 import me.parham1995.sms.core.AdRule
+import me.parham1995.sms.core.BlockRule
 
 /**
  * The two directions a backup moves messages, as pure functions of what the
@@ -15,21 +16,23 @@ object BackupPlan {
     )
 
     /**
-     * Merges the phone's messages into the repository and files each line by
-     * [ads]: an ad under [BackupLayout.ADS], the rest under
+     * Merges the phone's messages into the repository and files each line:
+     * what a [blocked] sender sent under [BackupLayout.BLOCKED], an ad (by
+     * [ads]) under [BackupLayout.ADS], the rest under
      * [BackupLayout.DIRECTORY]. [existing] lists the repository's files, so a
-     * line already in git moves when the rule changes, even when the phone
-     * no longer has it. [read] returns a file's current text, or null when it
+     * line already in git moves when a rule changes, even when the phone no
+     * longer has it. [read] returns a file's current text, or null when it
      * does not exist.
      *
-     * Nothing is dropped: across the two folders every line stays, and a line
-     * only moves between them. A file left with no lines is removed. Files
-     * that would not change are left out.
+     * Nothing is dropped: across the three folders every line stays, and a
+     * line only moves between them. A file left with no lines is removed.
+     * Files that would not change are left out.
      */
     fun backup(
         phone: Collection<BackupMessage>,
         callingCode: String,
         ads: AdRule,
+        blocked: BlockRule,
         existing: Collection<String>,
         read: (path: String) -> String?,
     ): List<Write> {
@@ -38,19 +41,24 @@ object BackupPlan {
         return names.flatMap { name ->
             val messagesPath = BackupLayout.messagesPath(name)
             val adsPath = BackupLayout.adsPath(name)
+            val blockedPath = BackupLayout.blockedPath(name)
             val oldMessages = read(messagesPath)?.let { BackupFile.parse(messagesPath, it) }
             val oldAds = read(adsPath)?.let { BackupFile.parse(adsPath, it) }
-            val kept = oldMessages.orEmpty() + oldAds.orEmpty()
+            val oldBlocked = read(blockedPath)?.let { BackupFile.parse(blockedPath, it) }
+            val kept = oldMessages.orEmpty() + oldAds.orEmpty() + oldBlocked.orEmpty()
             val known = kept.mapTo(HashSet()) { it.key }
             val fresh = byName[name].orEmpty().filter { known.add(it.key) }
             val freshKeys = fresh.mapTo(HashSet()) { it.key }
-            val (adLines, rest) =
+            val incoming = { line: BackupMessage -> line.direction == BackupMessage.Direction.IN }
+            val (blockedLines, unblocked) =
                 (kept + fresh)
                     .distinctBy { it.key }
-                    .partition { it.direction == BackupMessage.Direction.IN && ads.isAd(it.address, it.body) }
+                    .partition { incoming(it) && blocked.isBlocked(it.address) }
+            val (adLines, rest) = unblocked.partition { incoming(it) && ads.isAd(it.address, it.body) }
             listOfNotNull(
                 write(messagesPath, oldMessages, rest, rest.count { it.key in freshKeys }),
                 write(adsPath, oldAds, adLines, adLines.count { it.key in freshKeys }),
+                write(blockedPath, oldBlocked, blockedLines, blockedLines.count { it.key in freshKeys }),
             )
         }
     }
@@ -84,7 +92,7 @@ object BackupPlan {
         added: Int,
         files: Int,
     ): String {
-        if (added == 0) return "backup: file ads and ad senders"
+        if (added == 0) return "backup: file ads, blocked senders and their lists"
         val messages = if (added == 1) "1 message" else "$added messages"
         val conversations = if (files == 1) "1 conversation" else "$files conversations"
         return "backup: $messages in $conversations"

@@ -31,14 +31,25 @@ class ConversationDeleter
             threadIds.forEach { sms.deleteThread(it) }
         }
 
+        /** [sweep] with the ads, for "Delete ads". */
+        suspend fun deleteAds(): Int = sweep(ads = true)
+
         /**
-         * Backs up, then deletes every ad the backup read. An ad that arrives
-         * while the backup runs is newer than the cut-off and waits for the
-         * next run. Returns how many went.
+         * Backs up, then deletes every message from a blocked sender the backup
+         * read, and every ad too when [ads]. A message that arrives while the
+         * backup runs is newer than the cut-off and waits for the next run.
+         * Returns how many went.
          */
-        suspend fun deleteAds(): Int {
+        suspend fun sweep(ads: Boolean): Int {
             val upTo = System.currentTimeMillis()
             backup.backup()
-            return sms.deleteMessages(sms.adIds(upTo, settings.current().adRule))
+            val current = settings.current()
+            val adRule = current.adRule
+            val blockRule = current.blockRule
+            return sms.deleteMessages(
+                sms.incomingIds(upTo) { address, body ->
+                    blockRule.isBlocked(address) || (ads && adRule.isAd(address, body))
+                },
+            )
         }
     }

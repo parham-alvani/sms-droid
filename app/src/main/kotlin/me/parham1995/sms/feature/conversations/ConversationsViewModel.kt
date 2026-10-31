@@ -77,9 +77,13 @@ class ConversationsViewModel
                 if (!allowed) {
                     flowOf(emptyList())
                 } else {
-                    // A new ad sender recounts the ads without a message changing.
-                    combine(store.changes(), settings.settings.map { it.adRule }.distinctUntilChanged()) { _, ads ->
-                        store.conversations(ads)
+                    // A new ad sender recounts the ads, and a new block hides a
+                    // conversation, without a message changing.
+                    combine(
+                        store.changes(),
+                        settings.settings.map { it.adRule to it.blockRule }.distinctUntilChanged(),
+                    ) { _, (ads, blocked) ->
+                        store.conversations(ads).filterNot { blocked.isBlocked(it.address) }
                     }
                 }
             }
@@ -124,6 +128,13 @@ class ConversationsViewModel
             viewModelScope.launch {
                 addresses.forEach { settings.setAdSender(it, isAd = true) }
                 if (settings.current().deleteAds) BackupWorker.scheduleSoon(context)
+            }
+
+        /** Blocks these conversations' senders; they leave the list, and the next backup deletes them. */
+        fun block(addresses: Collection<String>) =
+            viewModelScope.launch {
+                addresses.forEach { settings.setBlocked(it, isBlocked = true) }
+                BackupWorker.scheduleSoon(context)
             }
 
         fun dismissMessage() = action.update { it.copy(message = null) }

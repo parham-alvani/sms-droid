@@ -61,6 +61,8 @@ class ThreadViewModel
             val deleted: Boolean = false,
             /** Whether everything this sender sends is an ad. */
             val isAdSender: Boolean = false,
+            /** Whether this sender is blocked, by itself or by a range. */
+            val isBlocked: Boolean = false,
         )
 
         private val route = savedState.toRoute<Thread>()
@@ -110,6 +112,7 @@ class ThreadViewModel
                     deleting = extra.deleting,
                     deleted = extra.deleted,
                     isAdSender = address.isNotEmpty() && current.adRule.isAdSender(address),
+                    isBlocked = current.blockRule.isBlocked(address),
                 )
             }.stateIn(
                 viewModelScope,
@@ -176,6 +179,18 @@ class ThreadViewModel
             viewModelScope.launch {
                 settings.setAdSender(address, isAd)
                 if (isAd && settings.current().deleteAds) BackupWorker.scheduleSoon(context)
+            }
+        }
+
+        /**
+         * Blocks this conversation's sender, or unblocks it. A sender blocked
+         * by a range stays blocked until the range goes, in settings.
+         */
+        fun setBlocked(isBlocked: Boolean) {
+            val address = state.value.address.takeIf { it.isNotEmpty() } ?: return
+            viewModelScope.launch {
+                settings.setBlocked(address, isBlocked)
+                if (isBlocked) BackupWorker.scheduleSoon(context)
             }
         }
 

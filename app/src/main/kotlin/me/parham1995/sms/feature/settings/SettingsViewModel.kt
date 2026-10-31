@@ -21,6 +21,7 @@ import me.parham1995.sms.data.backup.BackupWorker
 import me.parham1995.sms.data.git.SshKeyStore
 import me.parham1995.sms.data.reason
 import me.parham1995.sms.data.runCatchingUnlessCancelled
+import me.parham1995.sms.messaging.CallScreener
 import me.parham1995.sms.messaging.DefaultSmsApp
 import javax.inject.Inject
 
@@ -38,6 +39,8 @@ class SettingsViewModel
             val busy: Boolean = false,
             val message: String? = null,
             val isDefault: Boolean = true,
+            /** Whether this app holds the call screening role, so blocked numbers cannot call. */
+            val isScreening: Boolean = true,
         )
 
         val settings: StateFlow<Settings?> = store.settings.stateIn(viewModelScope, SharingStarted.Eagerly, null)
@@ -49,10 +52,19 @@ class SettingsViewModel
             )
 
         private val _ui =
-            MutableStateFlow(Ui(sshPublicKey = keys.publicKeyLine(), isDefault = DefaultSmsApp.isDefault(context)))
+            MutableStateFlow(
+                Ui(
+                    sshPublicKey = keys.publicKeyLine(),
+                    isDefault = DefaultSmsApp.isDefault(context),
+                    isScreening = CallScreener.isScreening(context),
+                ),
+            )
         val ui: StateFlow<Ui> = _ui.asStateFlow()
 
-        fun recheck() = _ui.update { it.copy(isDefault = DefaultSmsApp.isDefault(context)) }
+        fun recheck() =
+            _ui.update {
+                it.copy(isDefault = DefaultSmsApp.isDefault(context), isScreening = CallScreener.isScreening(context))
+            }
 
         fun saveRepository(
             remoteUrl: String,
@@ -82,6 +94,17 @@ class SettingsViewModel
 
         fun removeAdSender(key: String) =
             viewModelScope.launch { store.update { it.copy(adSenders = it.adSenders - key) } }
+
+        /** Blocks a number, a sender name, or a range such as `0942*`. */
+        fun block(text: String) {
+            if (text.isBlank()) return
+            viewModelScope.launch {
+                store.setBlocked(text, isBlocked = true)
+                BackupWorker.scheduleSoon(context)
+            }
+        }
+
+        fun unblock(entry: String) = viewModelScope.launch { store.update { it.copy(blocked = it.blocked - entry) } }
 
         fun generateKey() =
             viewModelScope.launch {

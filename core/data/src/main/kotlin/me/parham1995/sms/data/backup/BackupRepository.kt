@@ -7,10 +7,12 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import me.parham1995.sms.core.AdRule
+import me.parham1995.sms.core.BlockRule
 import me.parham1995.sms.core.backup.AdSenders
 import me.parham1995.sms.core.backup.BackupFile
 import me.parham1995.sms.core.backup.BackupLayout
 import me.parham1995.sms.core.backup.BackupPlan
+import me.parham1995.sms.core.backup.BlockedSenders
 import me.parham1995.sms.data.Settings
 import me.parham1995.sms.data.SettingsStore
 import me.parham1995.sms.data.git.BackupGit
@@ -31,9 +33,10 @@ import javax.inject.Singleton
  * because the remote moved, it starts again from the fetch, which is all the
  * conflict handling an add-only format needs.
  *
- * The ad senders travel too: each run merges the phone's list with
- * [AdSenders.PATH] in git, files every line by the merged list (ads under
- * `ads/`), and after the push the phone takes the merged list.
+ * The ad senders and the blocked list travel too: each run merges the
+ * phone's lists with [AdSenders.PATH] and [BlockedSenders.PATH] in git, files
+ * every line by the merged lists (ads under `ads/`, blocked senders under
+ * `blocked/`), and after the push the phone takes the merged lists.
  *
  * One at a time: the worker and the "back up now" button drive the same
  * directory.
@@ -75,28 +78,44 @@ class BackupRepository
                             current.adSenders,
                             inGit?.let(AdSenders::parse).orEmpty(),
                         )
-                    val existing = git.list(BackupLayout.DIRECTORY) + git.list(BackupLayout.ADS)
+                    val blockedInGit = git.read(BlockedSenders.PATH)
+                    val blocked =
+                        BlockedSenders.merge(
+                            current.blockedSynced,
+                            current.blocked,
+                            blockedInGit?.let { BlockedSenders.parseEntries(it, current.callingCode) }.orEmpty(),
+                        )
+                    val existing =
+                        git.list(BackupLayout.DIRECTORY) + git.list(BackupLayout.ADS) + git.list(BackupLayout.BLOCKED)
                     val writes =
                         BackupPlan.backup(
                             phone,
                             current.callingCode,
                             AdRule(senders, current.callingCode),
+                            BlockRule(blocked, current.callingCode),
                             existing,
                             git::read,
                         )
                     val sendersText = AdSenders.format(senders)
+                    val blockedText = BlockedSenders.format(blocked)
                     withContext(Dispatchers.IO) {
                         writes.forEach { write ->
                             write.text?.let { git.write(write.path, it) }
                                 ?: git.delete(write.path)
                         }
                         if (sendersText != inGit.orEmpty()) git.write(AdSenders.PATH, sendersText)
+                        if (blockedText != blockedInGit.orEmpty()) git.write(BlockedSenders.PATH, blockedText)
                     }
                     val added = writes.sumOf { it.added }
                     val conversations = writes.count { it.added > 0 }
                     git.commit(BackupPlan.commitMessage(added, conversations), author(current))
                     if (git.push()) {
-                        settings.syncAdSenders(started = current.adSenders, pushed = senders)
+                        settings.syncLists(
+                            adsStarted = current.adSenders,
+                            ads = senders,
+                            blockedStarted = current.blocked,
+                            blocked = blocked,
+                        )
                         settings.recordSuccess(System.currentTimeMillis(), added)
                         return@withLock Result(added, conversations)
                     }

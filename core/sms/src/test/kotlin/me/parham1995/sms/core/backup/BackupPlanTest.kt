@@ -3,6 +3,7 @@ package me.parham1995.sms.core.backup
 import com.google.common.truth.Truth.assertThat
 import me.parham1995.sms.core.AdRule
 import me.parham1995.sms.core.Ads
+import me.parham1995.sms.core.BlockRule
 import me.parham1995.sms.core.backup.BackupMessage.Direction
 import org.junit.Test
 import java.time.Instant
@@ -39,6 +40,7 @@ class BackupPlanTest {
                 unchanged + message("+989121234567", "new") + message("09121234567", "national"),
                 "98",
                 AdRule(),
+                BlockRule(),
                 files.keys,
                 files::get,
             )
@@ -50,7 +52,7 @@ class BackupPlanTest {
     fun `ads are filed under ads, the rest under messages`() {
         val ad = message("ExampleShop", "حراج پاییزه لغو11", "2026-10-24T07:00:00Z")
         val code = message("ExampleShop", "کد ورود: 482913 لغو11", "2026-10-24T08:00:00Z")
-        val writes = BackupPlan.backup(listOf(ad, code), "98", AdRule(), emptyList()) { null }
+        val writes = BackupPlan.backup(listOf(ad, code), "98", AdRule(), BlockRule(), emptyList()) { null }
         assertThat(writes.associate { it.path to it.text }).containsExactly(
             "messages/exampleshop.jsonl",
             BackupFile.format(listOf(code)),
@@ -65,7 +67,7 @@ class BackupPlanTest {
         val ad = message("ExampleShop", "حراج پاییزه لغو11", "2026-10-24T07:00:00Z")
         val kept = message("ExampleShop", "سفارش شما ارسال شد", "2026-10-24T08:00:00Z")
         val files = mapOf("messages/exampleshop.jsonl" to BackupFile.format(listOf(ad, kept)))
-        val writes = BackupPlan.backup(emptyList(), "98", AdRule(), files.keys, files::get)
+        val writes = BackupPlan.backup(emptyList(), "98", AdRule(), BlockRule(), files.keys, files::get)
         assertThat(writes.associate { it.path to it.text }).containsExactly(
             "messages/exampleshop.jsonl",
             BackupFile.format(listOf(kept)),
@@ -79,7 +81,7 @@ class BackupPlanTest {
     fun `a sender that stops being ads moves back, and the empty ads file goes`() {
         val line = message("ExampleShop", "تخفیف ویژه پاییز")
         val files = mapOf("ads/exampleshop.jsonl" to BackupFile.format(listOf(line)))
-        val writes = BackupPlan.backup(emptyList(), "98", AdRule(), files.keys, files::get)
+        val writes = BackupPlan.backup(emptyList(), "98", AdRule(), BlockRule(), files.keys, files::get)
         assertThat(writes.associate { it.path to it.text }).containsExactly(
             "messages/exampleshop.jsonl",
             BackupFile.format(listOf(line)),
@@ -92,7 +94,7 @@ class BackupPlanTest {
     fun `an ad sender's lines are filed as ads`() {
         val line = message("Example Shop", "تخفیف ویژه پاییز")
         val rule = AdRule(setOf(Ads.senderKey("Example Shop", "98")))
-        val writes = BackupPlan.backup(listOf(line), "98", rule, emptyList()) { null }
+        val writes = BackupPlan.backup(listOf(line), "98", rule, BlockRule(), emptyList()) { null }
         assertThat(writes.map { it.path }).containsExactly("ads/example_shop.jsonl")
     }
 
@@ -100,7 +102,7 @@ class BackupPlanTest {
     fun `filing that is already right writes nothing`() {
         val ad = message("ExampleShop", "حراج پاییزه لغو11")
         val files = mapOf("ads/exampleshop.jsonl" to BackupFile.format(listOf(ad)))
-        assertThat(BackupPlan.backup(listOf(ad), "98", AdRule(), files.keys, files::get)).isEmpty()
+        assertThat(BackupPlan.backup(listOf(ad), "98", AdRule(), BlockRule(), files.keys, files::get)).isEmpty()
     }
 
     @Test
@@ -115,5 +117,30 @@ class BackupPlanTest {
     fun `commit messages count what was added`() {
         assertThat(BackupPlan.commitMessage(1, 1)).isEqualTo("backup: 1 message in 1 conversation")
         assertThat(BackupPlan.commitMessage(12, 3)).isEqualTo("backup: 12 messages in 3 conversations")
+    }
+
+    @Test
+    fun `a blocked sender is filed under blocked, one-time codes too`() {
+        val code = message("09422000176", "کد تایید شما 123456")
+        val friend = message("09121234567", "سلام")
+        val writes =
+            BackupPlan.backup(
+                listOf(code, friend),
+                "98",
+                AdRule(),
+                BlockRule(setOf("+98942*")),
+                emptyList(),
+            ) { null }
+        assertThat(writes.map { it.path })
+            .containsExactly("messages/+989121234567.jsonl", "blocked/+989422000176.jsonl")
+    }
+
+    @Test
+    fun `an unblocked sender moves back to messages`() {
+        val line = message("09422000176", "hi")
+        val files = mapOf("blocked/+989422000176.jsonl" to BackupFile.format(listOf(line)))
+        val writes = BackupPlan.backup(emptyList(), "98", AdRule(), BlockRule(), files.keys, files::get)
+        assertThat(writes.associate { it.path to (it.text != null) })
+            .containsExactly("messages/+989422000176.jsonl", true, "blocked/+989422000176.jsonl", false)
     }
 }

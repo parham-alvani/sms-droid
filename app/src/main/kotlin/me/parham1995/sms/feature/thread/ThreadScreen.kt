@@ -57,6 +57,7 @@ import kotlinx.coroutines.launch
 import me.parham1995.sms.data.sms.Message
 import me.parham1995.sms.messaging.Sim
 import me.parham1995.sms.ui.Avatar
+import me.parham1995.sms.ui.BlockDialog
 import me.parham1995.sms.ui.DeleteConversationDialog
 import me.parham1995.sms.ui.DeletingDialog
 import me.parham1995.sms.ui.clockTime
@@ -76,6 +77,7 @@ fun ThreadScreen(
     val keepsBackup by viewModel.keepsBackup.collectAsStateWithLifecycle()
     var confirmDelete by remember { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
+    var confirmBlock by remember { mutableStateOf(false) }
 
     LaunchedEffect(state.deleted) { if (state.deleted) onBack() }
     if (confirmDelete) {
@@ -87,6 +89,16 @@ fun ThreadScreen(
                 viewModel.deleteConversation()
             },
             onDismiss = { confirmDelete = false },
+        )
+    }
+    if (confirmBlock) {
+        BlockDialog(
+            title = "Block ${state.name}?",
+            onConfirm = {
+                confirmBlock = false
+                viewModel.setBlocked(true)
+            },
+            onDismiss = { confirmBlock = false },
         )
     }
     if (state.deleting) DeletingDialog()
@@ -134,6 +146,13 @@ fun ThreadScreen(
                                     onClick = {
                                         menu = false
                                         viewModel.setAdSender(!state.isAdSender)
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(if (state.isBlocked) "Unblock" else "Block") },
+                                    onClick = {
+                                        menu = false
+                                        if (state.isBlocked) viewModel.setBlocked(false) else confirmBlock = true
                                     },
                                 )
                             }

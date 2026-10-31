@@ -59,6 +59,7 @@ import me.parham1995.sms.BuildConfig
 import me.parham1995.sms.data.BackupStatus
 import me.parham1995.sms.data.Settings
 import me.parham1995.sms.data.ThemeChoice
+import me.parham1995.sms.messaging.CallScreener
 import me.parham1995.sms.messaging.DefaultSmsApp
 import me.parham1995.sms.ui.mutedText
 import java.text.DateFormat
@@ -127,6 +128,19 @@ fun SettingsScreen(
                     Text("This is not the phone's SMS app, so it cannot read, receive or send messages.")
                     Button(onClick = { role.launch(DefaultSmsApp.request(context)) }) { Text("Make default") }
                 }
+            }
+
+            Section("Blocking") {
+                if (!ui.isScreening) {
+                    Text(
+                        "Calls are not screened, so a blocked number can still call. Let this app screen calls " +
+                            "to reject them; it only sees calls from numbers that are not contacts.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = mutedText,
+                    )
+                    Button(onClick = { role.launch(CallScreener.request(context)) }) { Text("Screen calls") }
+                }
+                Blocked(current.blocked, onBlock = viewModel::block, onUnblock = viewModel::unblock)
             }
 
             Section("Look") {
@@ -250,6 +264,50 @@ private fun AdSenders(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(key, modifier = Modifier.weight(1f))
                 IconButton(onClick = { onRemove(key) }) { Icon(Icons.Filled.Close, "Not ads") }
+            }
+        }
+    }
+}
+
+/** What is blocked, with a field to block a number, a sender name or a range by hand. */
+@Composable
+private fun Blocked(
+    entries: Set<String>,
+    onBlock: (String) -> Unit,
+    onUnblock: (String) -> Unit,
+) {
+    var text by rememberSaveable { mutableStateOf("") }
+    Column {
+        Text(
+            if (entries.isEmpty()) {
+                "Nothing is blocked. Block a sender from a conversation's menu, or type one here."
+            } else {
+                "Their messages and calls are blocked, one-time codes too. The list is blocked.txt in the backup."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = mutedText,
+        )
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                label = { Text("Number, sender name or range") },
+                supportingText = { Text("0942 200 0176, ResalatBank, or 0942* for every number starting 0942") },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+            )
+            OutlinedButton(
+                onClick = {
+                    onBlock(text)
+                    text = ""
+                },
+                enabled = text.isNotBlank(),
+            ) { Text("Block") }
+        }
+        entries.sorted().forEach { entry ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(entry, modifier = Modifier.weight(1f))
+                IconButton(onClick = { onUnblock(entry) }) { Icon(Icons.Filled.Close, "Unblock") }
             }
         }
     }

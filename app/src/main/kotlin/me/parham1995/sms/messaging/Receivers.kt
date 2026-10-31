@@ -73,11 +73,14 @@ class SmsDeliverReceiver : BroadcastReceiver() {
             // parts share a sender.
             val address = parts.first().displayOriginatingAddress.orEmpty()
             val body = parts.joinToString("") { it.displayMessageBody.orEmpty() }
-            // An ad that is going to be deleted is stored read and stays quiet;
-            // the backup that runs soon takes it first.
+            // An ad that is going to be deleted, and anything from a blocked
+            // sender, is stored read and stays quiet; the backup that runs soon
+            // takes it first.
             val quiet =
                 runCatchingUnlessCancelled {
-                    settings.current().let { it.deleteAds && it.adRule.isAd(address, body) }
+                    settings.current().let {
+                        it.blockRule.isBlocked(address) || (it.deleteAds && it.adRule.isAd(address, body))
+                    }
                 }.getOrDefault(false)
             val uri =
                 store.insertIncoming(
