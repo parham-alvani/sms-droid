@@ -1,0 +1,1 @@
+Block senders, names and number ranges like 0942*, for messages and calls, with the list kept in git as blocked.txt. Ads are filed under ads/ in the backup and can be deleted from the phone after it. Naz, Daylight and Wallpaper themes.
