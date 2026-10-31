@@ -13,8 +13,10 @@ import me.parham1995.sms.core.backup.BackupFile
 import me.parham1995.sms.core.backup.BackupLayout
 import me.parham1995.sms.core.backup.BackupPlan
 import me.parham1995.sms.core.backup.BlockedSenders
+import me.parham1995.sms.core.backup.CallPlan
 import me.parham1995.sms.data.Settings
 import me.parham1995.sms.data.SettingsStore
+import me.parham1995.sms.data.calls.CallLogStore
 import me.parham1995.sms.data.git.BackupGit
 import me.parham1995.sms.data.git.PushRefused
 import me.parham1995.sms.data.git.SshKeyStore
@@ -36,7 +38,8 @@ import javax.inject.Singleton
  * The ad senders and the blocked list travel too: each run merges the
  * phone's lists with [AdSenders.PATH] and [BlockedSenders.PATH] in git, files
  * every line by the merged lists (ads under `ads/`, blocked senders under
- * `blocked/`), and after the push the phone takes the merged lists.
+ * `blocked/`), and after the push the phone takes the merged lists. When
+ * turned on, the call log goes to `calls/` in the same commit.
  *
  * One at a time: the worker and the "back up now" button drive the same
  * directory.
@@ -49,6 +52,7 @@ class BackupRepository
         private val settings: SettingsStore,
         private val sms: SmsStore,
         private val keys: SshKeyStore,
+        private val callLog: CallLogStore,
     ) {
         private val root = File(context.filesDir, "backup")
         private val configDir = File(context.filesDir, "git")
@@ -60,6 +64,7 @@ class BackupRepository
         data class Result(
             val added: Int,
             val files: Int,
+            val calls: Int = 0,
         )
 
         /** Backs up every message. Null when no repository is set. */
@@ -69,6 +74,7 @@ class BackupRepository
                 if (!current.isConfigured) return@withLock null
                 val git = open(current)
                 val phone = sms.forBackup()
+                val calls = if (current.backupCalls) callLog.forBackup() else emptyList()
                 repeat(PUSH_ATTEMPTS) {
                     git.refresh()
                     val inGit = git.read(AdSenders.PATH)
@@ -96,10 +102,11 @@ class BackupRepository
                             existing,
                             git::read,
                         )
+                    val callWrites = CallPlan.backup(calls, current.callingCode, git::read)
                     val sendersText = AdSenders.format(senders)
                     val blockedText = BlockedSenders.format(blocked)
                     withContext(Dispatchers.IO) {
-                        writes.forEach { write ->
+                        (writes + callWrites).forEach { write ->
                             write.text?.let { git.write(write.path, it) }
                                 ?: git.delete(write.path)
                         }
@@ -108,7 +115,8 @@ class BackupRepository
                     }
                     val added = writes.sumOf { it.added }
                     val conversations = writes.count { it.added > 0 }
-                    git.commit(BackupPlan.commitMessage(added, conversations), author(current))
+                    val callsAdded = callWrites.sumOf { it.added }
+                    git.commit(BackupPlan.commitMessage(added, conversations, callsAdded), author(current))
                     if (git.push()) {
                         settings.syncLists(
                             adsStarted = current.adSenders,
@@ -117,7 +125,7 @@ class BackupRepository
                             blocked = blocked,
                         )
                         settings.recordSuccess(System.currentTimeMillis(), added)
-                        return@withLock Result(added, conversations)
+                        return@withLock Result(added, conversations, callsAdded)
                     }
                 }
                 throw PushRefused("the backup repository kept changing while this phone pushed")

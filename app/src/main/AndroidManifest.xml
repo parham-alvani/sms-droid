@@ -18,6 +18,8 @@
     <!-- Only to list the SIMs, for choosing which one sends. -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- The call log backup, only once it is turned on in settings. -->
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
     <!-- The git backup. -->
     <uses-permission android:name="android.permission.INTERNET" />
 

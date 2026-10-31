@@ -55,6 +55,8 @@ data class Settings(
     val blocked: Set<String> = emptySet(),
     /** The blocked list as the last backup left it in git, like [adSendersSynced]. */
     val blockedSynced: Set<String> = emptySet(),
+    /** Writes the call log to `calls/` in the backup, when the call log may be read. */
+    val backupCalls: Boolean = false,
     val theme: ThemeChoice = ThemeChoice.DARK,
 ) {
     val isConfigured: Boolean get() = remoteUrl.isNotBlank()
@@ -123,6 +125,7 @@ class SettingsStore
                 prefs[AD_SENDERS_SYNCED] = next.adSendersSynced
                 prefs[BLOCKED] = next.blocked
                 prefs[BLOCKED_SYNCED] = next.blockedSynced
+                prefs[BACKUP_CALLS] = next.backupCalls
                 prefs[THEME] = next.theme.name
             }
         }
@@ -201,6 +204,7 @@ class SettingsStore
                 adSendersSynced = this[AD_SENDERS_SYNCED] ?: defaults.adSendersSynced,
                 blocked = this[BLOCKED] ?: defaults.blocked,
                 blockedSynced = this[BLOCKED_SYNCED] ?: defaults.blockedSynced,
+                backupCalls = this[BACKUP_CALLS] ?: defaults.backupCalls,
                 theme = ThemeChoice.parse(this[THEME]),
             )
         }
@@ -217,6 +221,7 @@ class SettingsStore
             val AD_SENDERS_SYNCED = stringSetPreferencesKey("ad_senders_synced")
             val BLOCKED = stringSetPreferencesKey("blocked")
             val BLOCKED_SYNCED = stringSetPreferencesKey("blocked_synced")
+            val BACKUP_CALLS = booleanPreferencesKey("backup_calls")
             val THEME = stringPreferencesKey("theme")
             val BACKUP_AT = longPreferencesKey("backup_at")
             val BACKUP_ADDED = intPreferencesKey("backup_added")

@@ -90,6 +90,21 @@ class SettingsViewModel
                 if (on) BackupWorker.scheduleSoon(context)
             }
 
+        /**
+         * Turns the call log backup on once the permission is granted, and
+         * backs up soon so the calls already in the log reach git; or off.
+         */
+        fun setBackupCalls(on: Boolean) =
+            viewModelScope.launch {
+                store.update { it.copy(backupCalls = on) }
+                if (on) {
+                    BackupWorker.armForCalls(context)
+                    BackupWorker.scheduleSoon(context)
+                } else {
+                    BackupWorker.disarmForCalls(context)
+                }
+            }
+
         fun setTheme(theme: ThemeChoice) = viewModelScope.launch { store.update { it.copy(theme = theme) } }
 
         fun removeAdSender(key: String) =
@@ -121,8 +136,12 @@ class SettingsViewModel
                 val result = backups.backup()
                 when {
                     result == null -> "Set a repository first"
-                    result.added == 0 -> "Up to date: nothing new to back up"
-                    else -> "Backed up ${result.added} messages from ${result.files} conversations"
+                    result.added == 0 && result.calls == 0 -> "Up to date: nothing new to back up"
+                    result.added == 0 -> "Backed up ${result.calls} calls"
+                    result.calls == 0 -> "Backed up ${result.added} messages from ${result.files} conversations"
+                    else ->
+                        "Backed up ${result.added} messages from ${result.files} conversations, " +
+                            "and ${result.calls} calls"
                 }
             }
 

@@ -87,14 +87,20 @@ object BackupPlan {
             .sortedWith(BackupMessage.ORDER)
     }
 
-    /** The commit message for a backup that added [added] messages across [files] files. */
+    /** The commit message for a backup that added [added] messages across [files] files, and [calls] calls. */
     fun commitMessage(
         added: Int,
         files: Int,
+        calls: Int = 0,
     ): String {
-        if (added == 0) return "backup: file ads, blocked senders and their lists"
+        val callsPart = if (calls == 1) "1 call" else "$calls calls"
+        if (added ==
+            0
+        ) {
+            return if (calls == 0) "backup: file ads, blocked senders and their lists" else "backup: $callsPart"
+        }
         val messages = if (added == 1) "1 message" else "$added messages"
         val conversations = if (files == 1) "1 conversation" else "$files conversations"
-        return "backup: $messages in $conversations"
+        return "backup: $messages in $conversations" + if (calls == 0) "" else ", $callsPart"
     }
 }

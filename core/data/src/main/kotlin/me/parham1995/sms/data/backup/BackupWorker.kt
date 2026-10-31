@@ -1,6 +1,9 @@
 package me.parham1995.sms.data.backup
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
+import android.provider.CallLog
 import android.util.Log
 import androidx.hilt.work.HiltWorker
 import androidx.work.BackoffPolicy
@@ -28,6 +31,9 @@ import java.util.concurrent.TimeUnit
  * [ConversationDeleter.sweep], which backs up first and then deletes what
  * blocked senders sent, and the ads when they are to go.
  *
+ * With the call log backup on, a call that ends arms one more run a few
+ * minutes later ([armForCalls]); each such run arms the next.
+ *
  * The delay after a message is there to batch: a conversation of ten quick
  * messages is one commit, not ten. KEEP, so a message that arrives while a
  * backup is waiting joins it instead of pushing the wait back -- the backup
@@ -47,6 +53,7 @@ class BackupWorker
                 runCatchingUnlessCancelled {
                     deleter.sweep(ads = settings.current().deleteAds)
                 }
+            if (CALLS in tags && settings.current().backupCalls) armForCalls(applicationContext, after = true)
             val error = outcome.exceptionOrNull() ?: return Result.success()
             Log.w(TAG, "backup failed", error)
             settings.recordFailure(error.reason())
@@ -62,6 +69,7 @@ class BackupWorker
             private const val DAILY = "backup-daily"
             private const val SOON = "backup-soon"
             private const val SOON_MINUTES = 5L
+            private const val CALLS = "backup-calls"
             private const val BACKOFF_MINUTES = 10L
 
             private val network = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
@@ -75,6 +83,43 @@ class BackupWorker
                 WorkManager
                     .getInstance(context)
                     .enqueueUniquePeriodicWork(DAILY, ExistingPeriodicWorkPolicy.KEEP, request)
+            }
+
+            /**
+             * A backup that waits for the call log to change, then five more
+             * minutes, so a run of calls is one commit. [after] queues it
+             * behind the run that is calling, which cannot replace itself.
+             * Watching the call log needs the permission, so without it
+             * nothing is armed.
+             */
+            fun armForCalls(
+                context: Context,
+                after: Boolean = false,
+            ) {
+                if (context.checkSelfPermission(Manifest.permission.READ_CALL_LOG) !=
+                    PackageManager.PERMISSION_GRANTED
+                ) {
+                    return
+                }
+                val constraints =
+                    Constraints
+                        .Builder()
+                        .setRequiredNetworkType(NetworkType.CONNECTED)
+                        .addContentUriTrigger(CallLog.Calls.CONTENT_URI, true)
+                        .setTriggerContentUpdateDelay(SOON_MINUTES, TimeUnit.MINUTES)
+                        .build()
+                val request =
+                    OneTimeWorkRequestBuilder<BackupWorker>()
+                        .setConstraints(constraints)
+                        .addTag(CALLS)
+                        .build()
+                val policy = if (after) ExistingWorkPolicy.APPEND_OR_REPLACE else ExistingWorkPolicy.KEEP
+                WorkManager.getInstance(context).enqueueUniqueWork(CALLS, policy, request)
+            }
+
+            /** Stops [armForCalls], when the call log backup is turned off. */
+            fun disarmForCalls(context: Context) {
+                WorkManager.getInstance(context).cancelUniqueWork(CALLS)
             }
 
             fun scheduleSoon(context: Context) {

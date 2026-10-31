@@ -1,7 +1,9 @@
 package me.parham1995.sms.feature.settings
 
+import android.Manifest
 import android.content.ClipData
 import android.content.Intent
+import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -78,6 +80,10 @@ fun SettingsScreen(
     val context = LocalContext.current
     val role =
         rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { viewModel.recheck() }
+    val callLog =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) viewModel.setBackupCalls(true)
+        }
     LifecycleResumeEffect(Unit) {
         viewModel.recheck()
         onPauseOrDispose { }
@@ -184,6 +190,31 @@ fun SettingsScreen(
                 Repository(current, onSave = viewModel::saveRepository)
                 DeployKey(ui.sshPublicKey, current.remoteUrl, busy = ui.busy, onGenerate = viewModel::generateKey)
                 GitAuthor(current, onSave = viewModel::saveAuthor)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Back up the call log")
+                        Text(
+                            "Every call, one file per number under calls/, a few minutes after it ends. " +
+                                "Calls are not restored.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = mutedText,
+                        )
+                    }
+                    Switch(
+                        checked = current.backupCalls,
+                        onCheckedChange = { on ->
+                            if (!on) {
+                                viewModel.setBackupCalls(false)
+                            } else if (context.checkSelfPermission(Manifest.permission.READ_CALL_LOG) ==
+                                PackageManager.PERMISSION_GRANTED
+                            ) {
+                                viewModel.setBackupCalls(true)
+                            } else {
+                                callLog.launch(Manifest.permission.READ_CALL_LOG)
+                            }
+                        },
+                    )
+                }
                 Status(status)
                 ui.message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

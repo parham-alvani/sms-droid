@@ -21,6 +21,9 @@ object BackupLayout {
     const val DIRECTORY = "messages"
     const val ADS = "ads"
     const val BLOCKED = "blocked"
+
+    /** The call log, by `CallPlan`; not messages, so [nameOf] does not know it. */
+    const val CALLS = "calls"
     const val EXTENSION = ".jsonl"
 
     private val UNSAFE = Regex("""[^\p{L}\p{N}.+\-]+""")
@@ -36,6 +39,8 @@ object BackupLayout {
     fun adsPath(name: String): String = "$ADS/$name$EXTENSION"
 
     fun blockedPath(name: String): String = "$BLOCKED/$name$EXTENSION"
+
+    fun callsPath(name: String): String = "$CALLS/$name$EXTENSION"
 
     internal fun fileName(
         address: String,
