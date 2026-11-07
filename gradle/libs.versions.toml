@@ -6,7 +6,7 @@ ktlint = "14.2.0"
 
 composeBom = "2026.09.00"
 # Ahead of the BOM, as in notes-droid: MaterialExpressiveTheme and MotionScheme are public from 1.5.
-material3 = "1.5.0-beta02"
+material3 = "1.5.0-rc01"
 activity = "1.13.0"
 coreKtx = "1.19.1"
 lifecycle = "2.11.0"
@@ -21,7 +21,7 @@ work = "2.12.0"
 coroutines = "1.11.0"
 serialization = "1.12.0"
 
-jgit = "7.8.0.202609011348-r"
+jgit = "7.8.1.202611041320-r"
 eddsa = "0.3.0"
 slf4j = "2.0.20"
 
