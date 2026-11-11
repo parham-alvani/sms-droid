@@ -60,6 +60,7 @@ import me.parham1995.sms.ui.Avatar
 import me.parham1995.sms.ui.BlockDialog
 import me.parham1995.sms.ui.DeleteConversationDialog
 import me.parham1995.sms.ui.DeletingDialog
+import me.parham1995.sms.ui.GroupTags
 import me.parham1995.sms.ui.clockTime
 import me.parham1995.sms.ui.dayLabel
 import me.parham1995.sms.ui.dayOf
@@ -128,6 +129,7 @@ fun ThreadScreen(
                             if (state.name != state.address && state.address.isNotEmpty()) {
                                 Text(state.address, style = MaterialTheme.typography.labelMedium, color = mutedText)
                             }
+                            GroupTags(state.groups, Modifier.padding(top = 2.dp))
                         }
                     }
                 },

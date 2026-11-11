@@ -31,6 +31,7 @@ Keep Android out of `core/sms`. Anything that decides who a message is from, or 
 
 ## Rules that matter
 
+- **Groups come from Android's contact groups, not from the vCards.** `ContactsSource` reads `ContactsContract.Groups` (skipping system groups such as Google's "My Contacts") and the `GroupMembership` rows, and each `ContactIndex.Contact` carries its group titles. DAVx5 makes those groups from the address book's group cards (`X-ADDRESSBOOKSERVER-KIND:group`); the account keeps groups as separate vCards, so `CATEGORIES` on a contact never reaches the phone. `Groups` in `core/sms` holds the chip counts and the filter, and is tested there.
 - **The SMS provider is the only copy.** There is no Room mirror like Fossify's. Screens query `SmsStore` and re-query when `SmsStore.changes()` emits.
 - **Only the default SMS app may write messages, and it must.** `SmsDeliverReceiver` is the only thing that stores an incoming message; if it fails before the insert, the message is gone. Keep it small.
 - **Sender names are matched by `ContactIndex`, never by `PhoneLookup`.** `PhoneLookup` reduces an address to digits, so a sender name matches nothing; that bug is why this app exists.

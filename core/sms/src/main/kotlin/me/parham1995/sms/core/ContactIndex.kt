@@ -21,12 +21,18 @@ class ContactIndex(
     entries: List<Contact>,
     private val callingCode: String,
 ) {
-    /** One phone entry of one contact. A contact with three numbers is three of these. */
+    /**
+     * One phone entry of one contact. A contact with three numbers is three of these.
+     *
+     * [groups] are the contact groups it is in, by title: the groups DAVx5
+     * makes from the address book's group cards.
+     */
     data class Contact(
         val id: Long,
         val name: String,
         val number: String,
         val photoUri: String? = null,
+        val groups: List<String> = emptyList(),
     )
 
     private val byName = HashMap<String, Contact>()
@@ -69,6 +75,9 @@ class ContactIndex(
 
     /** The name to show for [address]: the contact's, or the address itself. */
     fun displayName(address: String): String = lookup(address)?.name ?: address.trim()
+
+    /** The groups of the contact behind [address], or none for an unknown sender. */
+    fun groupsOf(address: String): List<String> = lookup(address)?.groups.orEmpty()
 
     /** Contacts whose name or number contains [query], for picking a recipient. */
     fun search(

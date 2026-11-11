@@ -7,6 +7,7 @@ import android.database.ContentObserver
 import android.os.Handler
 import android.os.Looper
 import android.provider.ContactsContract
+import android.provider.ContactsContract.CommonDataKinds.GroupMembership
 import android.provider.ContactsContract.CommonDataKinds.Phone
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -40,8 +41,14 @@ import javax.inject.Singleton
  * conversation is slow on a long list anyway. A phone has a few thousand
  * entries at most, which is a few hundred kilobytes.
  *
- * Built again when the contacts change, when the calling code changes, and
- * when [refresh] is called after the contacts permission is granted.
+ * Each entry carries its contact's groups: the Android contact groups
+ * DAVx5 makes from the address book's group cards. A group of the
+ * system (Google's "My Contacts", "Starred in Android") is left out, since
+ * it says nothing about who someone is.
+ *
+ * Built again when the contacts or their groups change, when the calling
+ * code changes, and when [refresh] is called after the contacts permission
+ * is granted.
  */
 @Singleton
 class ContactsSource
@@ -84,12 +91,15 @@ class ContactsSource
                         }
                     }
                 context.contentResolver.registerContentObserver(ContactsContract.Contacts.CONTENT_URI, true, observer)
+                // A renamed group changes no contact.
+                context.contentResolver.registerContentObserver(ContactsContract.Groups.CONTENT_URI, true, observer)
                 trySend(Unit)
                 awaitClose { context.contentResolver.unregisterContentObserver(observer) }
             }.conflate()
 
         private suspend fun load(): List<ContactIndex.Contact> =
             withContext(Dispatchers.IO) {
+                val groups = runCatching { groups() }.getOrNull().orEmpty()
                 val projection =
                     arrayOf(Phone.CONTACT_ID, Phone.DISPLAY_NAME_PRIMARY, Phone.NUMBER, Phone.PHOTO_THUMBNAIL_URI)
                 runCatching {
@@ -106,6 +116,7 @@ class ContactsSource
                                         name = cursor.getString(name).orEmpty(),
                                         number = cursor.getString(number).orEmpty(),
                                         photoUri = cursor.getString(photo),
+                                        groups = groups[cursor.getLong(id)].orEmpty(),
                                     ),
                                 )
                             }
@@ -113,4 +124,43 @@ class ContactsSource
                     }
                 }.getOrNull().orEmpty()
             }
+
+        /** The group titles of every contact, by contact id, sorted, without system groups. */
+        private fun groups(): Map<Long, List<String>> {
+            val titles = HashMap<Long, String>()
+            context.contentResolver
+                .query(
+                    ContactsContract.Groups.CONTENT_URI,
+                    arrayOf(ContactsContract.Groups._ID, ContactsContract.Groups.TITLE),
+                    "${ContactsContract.Groups.DELETED} = 0 AND ${ContactsContract.Groups.SYSTEM_ID} IS NULL",
+                    null,
+                    null,
+                )?.use { cursor ->
+                    val id = cursor.getColumnIndexOrThrow(ContactsContract.Groups._ID)
+                    val title = cursor.getColumnIndexOrThrow(ContactsContract.Groups.TITLE)
+                    while (cursor.moveToNext()) {
+                        val name = cursor.getString(title)?.trim().orEmpty()
+                        if (name.isNotEmpty()) titles[cursor.getLong(id)] = name
+                    }
+                }
+            if (titles.isEmpty()) return emptyMap()
+
+            val out = HashMap<Long, MutableSet<String>>()
+            context.contentResolver
+                .query(
+                    ContactsContract.Data.CONTENT_URI,
+                    arrayOf(GroupMembership.CONTACT_ID, GroupMembership.GROUP_ROW_ID),
+                    "${ContactsContract.Data.MIMETYPE} = ?",
+                    arrayOf(GroupMembership.CONTENT_ITEM_TYPE),
+                    null,
+                )?.use { cursor ->
+                    val contact = cursor.getColumnIndexOrThrow(GroupMembership.CONTACT_ID)
+                    val group = cursor.getColumnIndexOrThrow(GroupMembership.GROUP_ROW_ID)
+                    while (cursor.moveToNext()) {
+                        val title = titles[cursor.getLong(group)] ?: continue
+                        out.getOrPut(cursor.getLong(contact)) { sortedSetOf(String.CASE_INSENSITIVE_ORDER) } += title
+                    }
+                }
+            return out.mapValues { it.value.toList() }
+        }
     }

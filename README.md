@@ -6,6 +6,7 @@
 An SMS app for Android 16 that does SMS only, and keeps every message in a git repository.
 
 - **Contact names for sender names.** Banks and operators send from names like `ResalatBank` or `HAMRAH_AVAL`. Save a contact with that name as its number, and the conversation shows the contact. Spaces, underscores and case do not matter.
+- **Contact groups as tags.** The groups a contact is in (Android contact groups, which DAVx5 makes from the address book's group cards) show as tags on the conversation and in its header. Chips above the list filter it to one group, and search matches group names too.
 - **Backup to git over SSH.** One JSON-lines file per conversation, added to and never trimmed. The SSH key is made on the phone. Use a private repository unless you want the messages public. Restore puts back what the phone is missing.
 - **Copy one-time codes** from the notification, for `رمز پویا`, `کد`, `code` and `OTP`.
 - **Two SIMs.** A reply goes out on the SIM the conversation came in on, and the composer lets you choose.

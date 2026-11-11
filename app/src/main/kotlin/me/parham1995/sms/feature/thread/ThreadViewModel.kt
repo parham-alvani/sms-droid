@@ -52,6 +52,8 @@ class ThreadViewModel
             val name: String = "",
             val address: String = "",
             val photoUri: String? = null,
+            /** The contact's groups, shown as tags under the name. */
+            val groups: List<String> = emptyList(),
             val messages: List<Message>? = null,
             val sims: List<Sim> = emptyList(),
             val sim: Int = -1,
@@ -105,6 +107,7 @@ class ThreadViewModel
                     name = index.displayName(address),
                     address = address,
                     photoUri = index.lookup(address)?.photoUri,
+                    groups = index.groupsOf(address),
                     messages = list,
                     sims = extra.sims,
                     sim = extra.chosenSim ?: simFor(list, extra),

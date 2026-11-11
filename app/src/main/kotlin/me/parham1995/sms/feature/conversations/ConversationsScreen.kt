@@ -67,6 +67,8 @@ import me.parham1995.sms.ui.Avatar
 import me.parham1995.sms.ui.BlockDialog
 import me.parham1995.sms.ui.DeleteConversationDialog
 import me.parham1995.sms.ui.DeletingDialog
+import me.parham1995.sms.ui.GroupChips
+import me.parham1995.sms.ui.GroupTags
 import me.parham1995.sms.ui.mutedText
 import me.parham1995.sms.ui.shortTime
 import me.parham1995.sms.ui.theme.fontFor
@@ -243,48 +245,83 @@ fun ConversationsScreen(
             }
         },
     ) { padding ->
-        Box(
+        Column(
             Modifier
                 .padding(padding)
                 .fillMaxSize(),
         ) {
-            val items = state.items
-            when {
-                !state.isDefault ->
-                    NotDefault(onSwitch = { role.launch(DefaultSmsApp.request(context)) })
-                items == null -> CircularProgressIndicator(Modifier.align(Alignment.Center))
-                items.isEmpty() ->
-                    Text(
-                        if (query.isBlank()) "No messages yet" else "Nothing matches",
-                        color = mutedText,
-                        modifier = Modifier.align(Alignment.Center),
-                    )
-                else ->
-                    LazyColumn(Modifier.fillMaxSize()) {
-                        items(items, key = { it.conversation.threadId }) { item ->
-                            val id = item.conversation.threadId
-                            val toggle = { selected = if (id in selected) selected - id else selected + id }
-                            ConversationLine(
-                                item,
-                                selected = id in selected,
-                                modifier =
-                                    Modifier.combinedClickable(
-                                        onClick = {
-                                            if (selecting) {
-                                                toggle()
-                                            } else {
-                                                onOpen(
-                                                    id,
-                                                    item.conversation.address,
-                                                )
-                                            }
-                                        },
-                                        onLongClick = toggle,
-                                    ),
-                            )
-                        }
-                    }
+            if (state.isDefault && state.groups.isNotEmpty() && !selecting) {
+                GroupChips(
+                    groups = state.groups,
+                    chosen = state.group,
+                    total = state.total,
+                    onChoose = viewModel::chooseGroup,
+                    modifier = Modifier.padding(bottom = 4.dp),
+                )
             }
+            ConversationList(
+                state = state,
+                query = query,
+                selected = selected,
+                onToggle = { id -> selected = if (id in selected) selected - id else selected + id },
+                onOpen = onOpen,
+                onSwitch = { role.launch(DefaultSmsApp.request(context)) },
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+            )
+        }
+    }
+}
+
+/** The list itself, or what stands in for it: the switch card, a spinner, or "nothing". */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ConversationList(
+    state: ConversationsViewModel.State,
+    query: String,
+    selected: Set<Long>,
+    onToggle: (Long) -> Unit,
+    onOpen: (threadId: Long, address: String) -> Unit,
+    onSwitch: () -> Unit,
+    modifier: Modifier,
+) {
+    val selecting = selected.isNotEmpty()
+    Box(modifier) {
+        val items = state.items
+        when {
+            !state.isDefault ->
+                NotDefault(onSwitch = onSwitch)
+            items == null -> CircularProgressIndicator(Modifier.align(Alignment.Center))
+            items.isEmpty() ->
+                Text(
+                    if (query.isBlank() && state.group == null) "No messages yet" else "Nothing matches",
+                    color = mutedText,
+                    modifier = Modifier.align(Alignment.Center),
+                )
+            else ->
+                LazyColumn(Modifier.fillMaxSize()) {
+                    items(items, key = { it.conversation.threadId }) { item ->
+                        val id = item.conversation.threadId
+                        val toggle = { onToggle(id) }
+                        ConversationLine(
+                            item,
+                            selected = id in selected,
+                            modifier =
+                                Modifier.combinedClickable(
+                                    onClick = {
+                                        if (selecting) {
+                                            toggle()
+                                        } else {
+                                            onOpen(
+                                                id,
+                                                item.conversation.address,
+                                            )
+                                        }
+                                    },
+                                    onLongClick = toggle,
+                                ),
+                        )
+                    }
+                }
         }
     }
 }
@@ -446,6 +483,7 @@ private fun ConversationLine(
                 )
                 if (unread) Badge { Text(conversation.unread.toString()) }
             }
+            GroupTags(item.groups, Modifier.padding(top = 4.dp))
         }
     }
 }

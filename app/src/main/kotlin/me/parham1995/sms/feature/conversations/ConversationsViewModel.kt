@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.parham1995.sms.core.Groups
 import me.parham1995.sms.data.SettingsStore
 import me.parham1995.sms.data.backup.BackupWorker
 import me.parham1995.sms.data.backup.ConversationDeleter
@@ -42,6 +43,8 @@ class ConversationsViewModel
             val conversation: Conversation,
             val name: String,
             val photoUri: String?,
+            /** The contact's groups, shown as tags on the line. */
+            val groups: List<String> = emptyList(),
         )
 
         data class State(
@@ -49,6 +52,12 @@ class ConversationsViewModel
             val items: List<Item>? = null,
             /** Ads on the phone, in every conversation, whatever the search. */
             val ads: Int = 0,
+            /** The groups with conversations, for the filter chips, whatever the search. */
+            val groups: List<Groups.Count> = emptyList(),
+            /** The chosen filter chip, or null for every conversation. */
+            val group: String? = null,
+            /** Every conversation in the list, before the chip and the search filter it. */
+            val total: Int = 0,
             val deleting: Boolean = false,
             /** What the last delete did, or why it did not. */
             val message: String? = null,
@@ -70,6 +79,11 @@ class ConversationsViewModel
         private val isDefault = MutableStateFlow(DefaultSmsApp.isDefault(context))
         val query = MutableStateFlow("")
 
+        /** The group chip that filters the list; null shows everything. */
+        val group = MutableStateFlow<String?>(null)
+
+        private val filter = combine(query, group) { q, g -> q to g }
+
         @OptIn(ExperimentalCoroutinesApi::class)
         private val conversations =
             isDefault.flatMapLatest { allowed ->
@@ -89,24 +103,36 @@ class ConversationsViewModel
             }
 
         val state: StateFlow<State> =
-            combine(isDefault, conversations, contacts.index, query, action) { allowed, list, index, q, action ->
+            combine(isDefault, conversations, contacts.index, filter, action) { allowed, list, index, (q, g), action ->
+                val all =
+                    list.map { conversation ->
+                        val contact = index.lookup(conversation.address)
+                        Item(
+                            conversation,
+                            contact?.name ?: conversation.address,
+                            contact?.photoUri,
+                            contact?.groups.orEmpty(),
+                        )
+                    }
+                val counts = Groups.counts(all.map { it.groups })
+                val chosen = Groups.keep(g, counts)
                 val items =
-                    list
-                        .map { conversation ->
-                            val contact = index.lookup(conversation.address)
-                            Item(conversation, contact?.name ?: conversation.address, contact?.photoUri)
-                        }.filter {
-                            q.isBlank() ||
-                                it.name.contains(
-                                    q,
-                                    true,
-                                ) ||
-                                it.conversation.snippet.contains(q, true)
-                        }
+                    all.filter { item ->
+                        Groups.matches(item.groups, chosen) &&
+                            (
+                                q.isBlank() ||
+                                    item.name.contains(q, true) ||
+                                    item.conversation.snippet.contains(q, true) ||
+                                    item.groups.any { it.contains(q, true) }
+                            )
+                    }
                 State(
                     isDefault = allowed,
                     items = items,
                     ads = list.sumOf { it.ads },
+                    groups = counts,
+                    group = chosen,
+                    total = all.size,
                     deleting = action.deleting,
                     message = action.message,
                 )
@@ -138,6 +164,11 @@ class ConversationsViewModel
             }
 
         fun dismissMessage() = action.update { it.copy(message = null) }
+
+        /** Shows only [name]'s conversations; the same chip again, or null, shows them all. */
+        fun chooseGroup(name: String?) {
+            group.value = name?.takeIf { it != group.value }
+        }
 
         private fun <T> run(
             done: (T) -> String?,
