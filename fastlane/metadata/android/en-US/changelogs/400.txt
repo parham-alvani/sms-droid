@@ -1,0 +1,1 @@
+Contact groups show as tags on each conversation and in its header, and chips above the list filter it by group. The groups are the Android contact groups that DAVx5 makes from the address book.
